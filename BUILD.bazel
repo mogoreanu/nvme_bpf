@@ -14,3 +14,71 @@ cc_binary(
         "@abseil-cpp//absl/time",
     ],
 )
+
+# 1. Compile the BPF program to an object file.
+# We use a genrule because native BPF rules are not standard in Bazel yet.
+genrule(
+    name = "nvme_trace_bpf_o",
+    srcs = [
+        "nvme_trace.bpf.c",
+        "nvme_trace.h",
+        "nvme_core.h",
+        # We need vmlinux.h. Assuming it is exposed by a package at root or vmlinux.h/
+        "//libbpf:headers",
+        "//libbpf:uapi_headers_files",
+    ],
+    outs = ["nvme_trace.bpf.o"],
+    cmd = """
+        # Create a 'bpf' directory and copy libbpf headers there to satisfy <bpf/bpf_helpers.h>
+        mkdir -p bpf
+        for h in $(locations //libbpf:headers); do
+            cp "$$h" bpf/
+        done
+        
+        # Create 'linux' directory for uapi headers
+        mkdir -p linux
+        # Copy uapi headers. We filter for linux/ headers to avoid directory structure issues if glob returns more.
+        # Assuming structure is include/uapi/linux/*.h in the source.
+        # Flattening might be an issue if not careful, but here we just need 'linux/' prefix.
+        for h in $(locations //libbpf:uapi_headers_files); do
+            # Check if it is a linux header
+            if [[ "$$h" == *"linux/"* ]]; then
+                cp "$$h" linux/
+            fi
+        done
+
+        clang -g -O2 -target bpf \
+            -D__TARGET_ARCH_x86 \
+            -I $$(dirname $(location nvme_core.h)) \
+            -I . \
+            -I $$(pwd) \
+            -c $(location nvme_trace.bpf.c) \
+            -o $@
+    """,
+)
+
+# # 2. Generate the BPF skeleton header using bpftool.
+# genrule(
+#     name = "nvme_trace_skel_h",
+#     srcs = [":nvme_trace.bpf.o"],
+#     outs = ["nvme_trace.skel.h"],
+#     # Assuming 'bpftool' is in the system PATH. 
+#     # For a hermetic build, you would build it from //bpftool.
+#     cmd = "bpftool gen skeleton $(location :nvme_trace.bpf.o) > $@",
+# )
+
+# # 3. Build the userspace binary.
+# cc_binary(
+#     name = "nvme_trace",
+#     srcs = [
+#         "nvme_trace.c",
+#         "nvme_trace.h",
+#         ":nvme_trace_skel_h",
+#     ],
+#     includes = [""],
+#     deps = [
+#         "//libbpf:libbpf",
+#     ],
+#     # Link against system libraries required by libbpf (elf, zlib)
+#     linkopts = ["-lelf", "-lz"],
+# )
