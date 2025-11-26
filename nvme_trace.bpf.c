@@ -9,7 +9,7 @@ typedef _Bool bool;
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 
-char LICENSE[] SEC("license") = "Apache";
+char LICENSE[] SEC("license") = "MIT";
 
 struct {
   __uint(type, BPF_MAP_TYPE_RINGBUF);

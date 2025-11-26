@@ -85,13 +85,50 @@ bpf_skel(
   skel_header = "nvme_trace.skel.h",
 )
 
-# 3. Build the userspace binary.
 cc_binary(
     name = "nvme_trace",
     srcs = [
         "nvme_trace.cc",
         "nvme_trace.h",
         ":nvme_trace_skel_h",
+    ],
+    deps = [
+        ":libbpf",
+        "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/flags:parse",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:flags",
+        "@abseil-cpp//absl/log:initialize",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
+    ],
+    # Link against system libraries required by libbpf (elf, zlib)
+    linkopts = ["-lelf", "-lz"],
+)
+
+bpf_program(
+    name = "nvme_latency_bpf_o",
+    src = "nvme_latency.bpf.c",
+    hdrs = [
+        "nvme_latency.h",
+        "nvme_core.h",
+    ],
+    bpf_object = "nvme_latency.bpf.o"
+)
+
+bpf_skel(
+  name = "nvme_latency_skel_h",
+  bpf_object = ":nvme_latency_bpf_o",
+  skel_header = "nvme_latency.skel.h",
+)
+
+cc_binary(
+    name = "nvme_latency",
+    srcs = [
+        "nvme_latency.cc",
+        "nvme_latency.h",
+        ":nvme_latency_skel_h",
     ],
     deps = [
         ":libbpf",

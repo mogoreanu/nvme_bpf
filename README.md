@@ -49,5 +49,6 @@ bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
 
 # Relevant projects
 
+* https://github.com/iovisor/bcc
 * https://github.com/libbpf/libbpf-bootstrap
 * https://github.com/jackhumphries/bazel-ebpf
