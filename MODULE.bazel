@@ -1,0 +1,26 @@
+module(
+    name = "nvme_bpf",
+    version = "0.0.0-20251126-4de3c74",
+)
+
+# https://abseil.io/docs/cpp/quickstart
+
+# Choose the most recent version available at
+# https://registry.bazel.build/modules/abseil-cpp.
+bazel_dep(name = "abseil-cpp", version = "20250127.1")
+bazel_dep(name = "rules_cc", version = "0.0.17")
+bazel_dep(name = "bazel_skylib", version = "1.7.1")
+bazel_dep(name = "platforms", version = "0.0.10")
+
+bazel_dep(
+    name = "google_benchmark",
+    version = "1.8.5",
+    dev_dependency = True,
+)
+
+# Note: Googletest is NOT a dev_dependency. Some Abseil test utilities
+# intended to be used by Abseil users depend on GoogleTest.
+bazel_dep(
+    name = "googletest",
+    version = "1.15.2",
+)

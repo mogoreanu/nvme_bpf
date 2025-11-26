@@ -1,0 +1,24 @@
+{
+    "C_Cpp.clang_format_style": "Google",
+    "editor.rulers": [
+        80
+    ],
+    "files.associations": {
+        "*.bt": "bpftrace"
+    },
+    "[bpftrace]": {
+        "editor.insertSpaces": true,
+        "editor.tabSize": 2,
+        "editor.detectIndentation": false
+    },    
+    "[c]": {
+        "editor.detectIndentation": false,
+        "editor.tabSize": 2,
+        "editor.insertSpaces": false,
+        "editor.rulers": [80,100]
+    },
+    "editor.detectIndentation": false,
+    "C_Cpp.default.includePath": [
+        "/usr/src/linux-headers-6.1.0-40-common/include/",
+    ],
+}

@@ -1,0 +1,25 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/bazel-nvme_bpf/external/abseil-cpp+",
+                "${workspaceFolder}/bazel-nvme_bpf/external/googletest+/googletest/include",
+                "${workspaceFolder}/bazel-nvme_bpf/external/google_benchmark+/include",
+                // The generic include doesn't seem to work because uname is not
+                // invoked :(.
+                // "/usr/src/linux-headers-$(uname -r)/include/",
+                // "/usr/src/linux-headers-$(uname -r | sed 's/-[^-]*$//')-common/include/",
+                "/usr/src/linux-headers-6.1.0-40-amd64/include/",
+                "/usr/src/linux-headers-6.1.0-40-common/include/",
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-clang-x64"
+        }
+    ],
+    "version": 4
+}

@@ -1,1 +1,7 @@
 libbpf
+
+MODULE.bazel.lock
+bazel-bin
+bazel-nvme_bpf
+bazel-out
+bazel-testlogs
