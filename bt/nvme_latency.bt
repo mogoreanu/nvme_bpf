@@ -1,0 +1,54 @@
+#!/usr/bin/bpftrace
+
+#include <linux/blkdev.h>
+#include <linux/nvme.h>
+#include <linux/nvme_ioctl.h>
+
+#define VLOG true
+
+BEGIN {
+  printf("Tracing nvme command latency. Hit Ctrl-C to end.\n");
+}
+
+// blk_status_t nvme_setup_cmd(struct nvme_ns *ns, struct request *req)
+// Intercept kretfunc because the command_id field is populated during setup.
+fexit:vmlinux:nvme_setup_cmd {
+  $ns = args.ns;
+  $req = args.req;
+  $req_end = $req + 1;
+  $nreq = (struct nvme_request *)$req_end;
+  $nvme_cmd = (struct nvme_command *)$nreq->cmd;
+  if (VLOG) {
+    if ($ns->disk->disk_name == "") {
+      printf("nvme_setup_cmd admin nvme%d opcode: %x cid: %d.\n", 
+              $nreq->ctrl->instance, $nvme_cmd->common.opcode, 
+                    $nvme_cmd->common.command_id);
+    } else {
+      printf("nvme_setup_cmd IO disk_name: %s opcode: %x cid: %d.\n", 
+              $ns->disk->disk_name, $nvme_cmd->common.opcode, 
+                    $nvme_cmd->common.command_id);
+    }
+  }
+  @in_flight_req[$req] = nsecs;
+}
+
+// void nvme_complete_batch_req(struct request *req)
+// Intercept only when there's a corresponding start entry.
+// TODO(mogo): /has_key(@in_flight_req, args.req)/ doesn't seem to work.
+fentry:vmlinux:nvme_complete_batch_req,fentry:vmlinux:nvme_complete_rq /@in_flight_req[args.req]/ {
+  $req = args.req;
+  $req_end = $req + 1;
+  $nreq = (struct nvme_request *)$req_end;
+  $nvme_cmd = (struct nvme_command *)$nreq->cmd;
+  $lat_us = (nsecs - @in_flight_req[$req]) / 1000;
+  delete(@in_flight_req[$req]);
+  @req_lat_us = hist($lat_us, 4);
+  if (VLOG) {
+    printf("nvme_complete_batch_req opcode: %x cid: %d lat_us: %d\n",
+           $nvme_cmd->common.opcode, $nvme_cmd->common.command_id, $lat_us);
+  }
+}
+
+END {
+  clear(@in_flight_req); 
+}

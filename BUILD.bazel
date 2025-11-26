@@ -124,13 +124,21 @@ genrule(
 cc_binary(
     name = "nvme_trace",
     srcs = [
-        "nvme_trace.c",
+        "nvme_trace.cc",
         "nvme_trace.h",
         ":nvme_trace_skel_h",
     ],
     # includes = [""],
     deps = [
         ":libbpf",
+        "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/flags:parse",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:flags",
+        "@abseil-cpp//absl/log:initialize",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
     ],
     # Link against system libraries required by libbpf (elf, zlib)
     linkopts = ["-lelf", "-lz"],

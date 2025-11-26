@@ -1,0 +1,28 @@
+#!/usr/bin/sudo bpftrace
+
+BEGIN {
+  print("Tracing nvme commands, press Ctrl+C to stop.\n");
+}
+
+tracepoint:nvme:nvme_setup_cmd /args->qid > 0/ {
+  // Record the request start time. A request is uniquely within a controller by
+  // the submission queue id and command id.
+  @start_info[args->ctrl_id, args->qid, args->cid] = nsecs;
+}
+
+// Notice the block surroounded by /.../, it invokes the tracepoint only when
+// the corresponding key in the map is found.
+tracepoint:nvme:nvme_complete_rq 
+/@start_info[args->ctrl_id, args->qid, args->cid]/ {
+  // Locate the completing request.
+  $start_ns = @start_info[args->ctrl_id, args->qid, args->cid];  
+  delete(@start_info[args->ctrl_id, args->qid, args->cid]);
+
+  $latency_us = (nsecs - $start_ns) / 1000;
+  // Record the request latency into a histogram.
+  @latency_hist = hist($latency_us);
+}
+
+END {
+  clear(@start_info);
+}

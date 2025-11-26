@@ -2,6 +2,7 @@
 // #include "vmlinux.h"
 // clang-format off
 #include "nvme_core.h"
+typedef _Bool bool;
 // clang-format on
 #include "nvme_trace.h"
 

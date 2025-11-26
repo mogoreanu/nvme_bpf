@@ -1,0 +1,87 @@
+#!/usr/bin/sudo bpftrace
+
+// Each power of 2 will be split into 2^HIST_EXTRA_BUCKETS linear sub-buckets.
+#define HIST_EXTRA_BUCKETS 3
+
+// Specifies whether the script should create the histogram with string keys,
+// causes `misaligned stack access off` error on some bpftrace versions.
+#define USE_STR 0
+
+BEGIN {
+  if (USE_STR) {
+    @ioopcode[0x00] = "flush";
+    @ioopcode[0x01] = "write";
+    @ioopcode[0x02] = "read";
+    @ioopcode[0x04] = "write_uncor";
+    @ioopcode[0x05] = "compare";
+    @ioopcode[0x08] = "write_zeroes";
+    @ioopcode[0x09] = "dsm";
+    @ioopcode[0x0d] = "resv_register";
+    @ioopcode[0x0e] = "resv_report";
+    @ioopcode[0x11] = "resv_acquire";
+    @ioopcode[0x15] = "resv_release";
+  }
+}
+
+tracepoint:nvme:nvme_setup_cmd /args->qid > 0/ {
+    /*
+     * Get number of logical blocks (NLB) from cdw12.
+     * cdw12 is bytes 8,9,10,11 in the args->cdw10[24] array.
+     * We must reconstruct the u32 from four u8s (assuming little-endian).
+     */
+    $nlb_b0 = args->cdw10[8];
+    $nlb_b1 = args->cdw10[9];
+    $nlb_b2 = args->cdw10[10];
+    $nlb_b3 = args->cdw10[11];
+    $nlb = ($nlb_b3 << 24) | ($nlb_b2 << 16) | ($nlb_b1 << 8) | $nlb_b0;
+
+    $nlb++;
+
+    @start_info[args->ctrl_id, args->qid, args->cid] = 
+        (nsecs, args->opcode, $nlb);
+}
+
+tracepoint:nvme:nvme_complete_rq 
+/@start_info[args->ctrl_id, args->qid, args->cid].0/ {
+  $start_tuple = @start_info[args->ctrl_id, args->qid, args->cid];
+  $start_ns = $start_tuple.0;
+  $opcode = $start_tuple.1;
+  $nlb = $start_tuple.2;
+
+  $latency_us = (nsecs - $start_ns) / 1000;
+
+  if (USE_STR) {
+    // Assuming LBA size of 4K.
+    $nlb_str = "";
+    if ($nlb <=  4) {
+      $nlb_str = "<=16K";
+    } else if ($nlb <= 16) {
+      $nlb_str = "<=64K";
+    } else {
+      $nlb_str = " >64K"
+    }
+    if ($opcode == 0) {
+      // Flush does not have NLB.
+      $nlb_str = "-";
+    }
+    @latency_hist_str[args->ctrl_id, @ioopcode[$opcode], $nlb_str] = 
+        hist($latency_us, HIST_EXTRA_BUCKETS);
+  } else {
+    $nlb_class = 0;
+    if ($nlb > 16) {
+      $nlb_class = 2;
+    } else if ($nlb > 4) {
+      $nlb_class = 1;
+    } 
+    @latency_hist[args->ctrl_id, $opcode, $nlb_class] = 
+        hist($latency_us, HIST_EXTRA_BUCKETS);
+  }
+
+  delete(@start_info[args->ctrl_id, args->qid, args->cid]);
+}
+
+END {
+  clear(@start_info);
+  clear(@ioopcode);
+}
+

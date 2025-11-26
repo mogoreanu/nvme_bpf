@@ -1,0 +1,34 @@
+#!/usr/bin/bpftrace
+
+#include <linux/binfmts.h>
+
+/*
+ * This script traces new process executions and prints the binary name.
+ * It attaches to the 'bprm_execve' kernel function, which is
+ * invoked just before a new program is executed.
+ */
+
+kprobe:bprm_execve
+{
+  // comm is the name of the *parent* process (e.g., bash).
+  // To get the new binary name, we read the 'filename' field from
+  // the 'struct linux_binprm *bprm' (which is arg0).
+  @execs[str(((struct linux_binprm *)arg0)->filename)] = count();
+}
+
+interval:s:1
+{
+  // Every 1 second, print the map of executed commands.
+  // This will show all unique binaries executed in the last second
+  // and how many times each was run.
+  print(@execs);
+  
+  // Clear the map for the next interval.
+  clear(@execs);
+}
+
+END
+{
+  // Clean up the map on exit (e.g., when Ctrl-C is pressed).
+  clear(@execs);
+}

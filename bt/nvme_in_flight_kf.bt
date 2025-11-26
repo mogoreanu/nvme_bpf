@@ -1,0 +1,71 @@
+#!/usr/bin/bpftrace
+
+#include <linux/blkdev.h>
+#include <linux/nvme.h>
+#include <linux/nvme_ioctl.h>
+
+#define VLOG false
+
+BEGIN {
+  printf("Tracing nvme command latency. Hit Ctrl-C to end.\n");
+}
+
+// blk_status_t nvme_setup_cmd(struct nvme_ns *ns, struct request *req)
+// Intercept kretfunc because the command_id field is populated during setup.
+fexit:vmlinux:nvme_setup_cmd {
+  $ns = args.ns;
+  $req = args.req;
+  $req_end = $req + 1;
+  $nvme_req = (struct nvme_request *)$req_end;
+  $nvme_cmd = (struct nvme_command *)$nvme_req->cmd;
+  $cid = $nvme_cmd->common.command_id;
+  $opc = $nvme_cmd->common.opcode;
+  if (VLOG) {
+    if ($ns->disk->disk_name == "") {
+      printf("kfunc:vmlinux:nvme_setup_cmd admin opcode: %x cid: %d.\n", 
+               $opc, $cid);
+    } else {
+      printf("kfunc:vmlinux:nvme_setup_cmd io disk_name: %s opcode: %x cid: %d.\n", 
+             $ns->disk->disk_name, $opc, $cid);
+    }
+  }
+  @in_flight_commands[$req] = (nsecs, $cid, $opc);
+  @started_count = count();
+}
+
+// void nvme_complete_batch_req(struct request *req)
+// Intercept only when there's a corresponding start entry.
+// TODO(mogo): /has_key(@in_flight_commands, args.req)/ doesn't seem to work.
+fentry:vmlinux:nvme_complete_batch_req,fentry:vmlinux:nvme_complete_rq /@in_flight_commands[args.req].0/ {
+  $req = args.req;
+  $req_end = $req + 1;
+  $nvme_req = (struct nvme_request *)$req_end;
+  $nvme_cmd = (struct nvme_command *)$nvme_req->cmd;
+  if (VLOG) {
+    printf("kfunc:vmlinux:nvme_complete_batch_req opcode: %x cid: %d.\n",
+           $nvme_cmd->common.opcode, $nvme_cmd->common.command_id);
+  }
+  @usecs = hist((nsecs - @in_flight_commands[$req].0) / 1000);
+  delete(@in_flight_commands[$req]);
+  @finished_count = count();
+}
+
+interval:s:1 { 
+  // len(@in_flight_commands) doesn't seem to work on 0.20.2
+  $in_flight_count = @started_count - @finished_count;
+  if ($in_flight_count > 0) {
+    // TODO(mogo): Would be nice to print only commands that have benn in-flight
+    // for more than a certain amount of time, but for loop doesn't work.
+    print(@in_flight_commands);
+  }
+}  
+
+/*
+fentry:vmlinux:nvme_* {
+  printf("Entered: %s\n", probe);
+}
+*/
+
+END {
+  clear(@in_flight_commands); 
+}

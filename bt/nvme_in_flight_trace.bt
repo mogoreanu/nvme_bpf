@@ -1,0 +1,64 @@
+#!/usr/bin/bpftrace
+
+/*
+A simple script that prints in-flight commands that it happened ot have caught
+every second.
+A repeated print of the same command signals that it's stuck and not returning.
+*/
+
+#include <linux/blkdev.h>
+#include <linux/nvme.h>
+#include <linux/nvme_ioctl.h>
+
+#define VLOG false
+
+BEGIN {
+  printf("Tracing in-flight NVMe commands. Hit Ctrl-C to end.\n");
+}
+
+tracepoint:nvme:nvme_setup_cmd {
+  if (VLOG) {
+    if (args->qid == 0) {
+      printf("nvme_setup_cmd admin opcode: %x cid: %d.\n", 
+               args->opcode, args->cid);
+    } else {
+      printf("nvme_setup_cmd io disk_name: %s opcode: %x cid: %d.\n", 
+             args->disk, args->opcode, args->cid);
+    }
+  }
+  @in_flight_commands[args->ctrl_id, args->qid, args->cid] = 
+      (nsecs, args->cid, args->opcode);
+  @started_count = count();
+}
+
+tracepoint:nvme:nvme_complete_rq {
+  $start_tuple = @in_flight_commands[args->ctrl_id, args->qid, args->cid];
+  if ($start_tuple.0 == 0) {
+    return;
+  }
+  $start_ns = $start_tuple.0;
+  $opcode = $start_tuple.1;
+  $nlb = $start_tuple.2;
+
+  @finished_count = count();
+  delete(@in_flight_commands[args->ctrl_id, args->qid, args->cid]);
+
+  if (VLOG) {
+    printf("nvme_complete_rq cid: %d.\n", args->cid);
+  }
+  @usecs = hist((nsecs - $start_ns) / 1000);
+}
+
+interval:s:1 { 
+  $in_flight_count = @started_count - @finished_count;
+  if ($in_flight_count > 0) {
+    print(@in_flight_commands);
+    print($in_flight_count);
+  }
+}  
+
+END {
+  clear(@in_flight_commands); 
+  clear(@started_count);
+  clear(@finished_count);
+}

@@ -1,0 +1,47 @@
+#!/usr/bin/sudo bpftrace
+
+BEGIN {
+  print("Tracing nvme commands, press Ctrl+C to stop.\n");
+}
+
+tracepoint:nvme:nvme_setup_cmd /args->qid > 0/ {
+    /*
+     * Get number of logical blocks (NLB) from cdw12.
+     * cdw12 is bytes 8,9,10,11 in the args->cdw10[24] array.
+     * We must reconstruct the u32 from four u8s (assuming little-endian).
+     */
+    $nlb_b0 = args->cdw10[8];
+    $nlb_b1 = args->cdw10[9];
+    $nlb_b2 = args->cdw10[10];
+    $nlb_b3 = args->cdw10[11];
+    $nlb = ($nlb_b3 << 24) | ($nlb_b2 << 16) | ($nlb_b1 << 8) | $nlb_b0;
+
+    $nlb++;
+
+    @start_info[args->ctrl_id, args->qid, args->cid] = 
+        (nsecs, args->opcode, $nlb);
+}
+
+tracepoint:nvme:nvme_complete_rq 
+/@start_info[args->ctrl_id, args->qid, args->cid].0/ {
+  $start_tuple = @start_info[args->ctrl_id, args->qid, args->cid];
+  $start_ns = $start_tuple.0;
+  $opcode = $start_tuple.1;
+  $nlb = $start_tuple.2;
+
+  $latency_us = (nsecs - $start_ns) / 1000;
+
+  $nlb_class = 0;
+  if ($nlb > 16) {
+    $nlb_class = 2;
+  } else if ($nlb > 4) {
+    $nlb_class = 1;
+  } 
+  @latency_hist[args->ctrl_id, $opcode, $nlb_class] = hist($latency_us);
+
+  delete(@start_info[args->ctrl_id, args->qid, args->cid]);
+}
+
+END {
+  clear(@start_info);
+}

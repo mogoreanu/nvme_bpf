@@ -1,0 +1,294 @@
+https://github.com/brendangregg/bpf-perf-tools-book/blob/master/originals/Ch09_Disks/nvmelatency.bt
+
+static void nvme_log_error(struct request *req)
+{
+	struct nvme_ns *ns = req->q->queuedata;
+	struct nvme_request *nr = nvme_req(req);
+
+	if (ns) {
+		pr_err_ratelimited("%s: %s(0x%x) @ LBA %llu, %u blocks, %s (sct 0x%x / sc 0x%x) %s%s\n",
+		       ns->disk ? ns->disk->disk_name : "?",
+
+
+// blk_status_t nvme_setup_cmd(struct nvme_ns *ns, struct request *req)
+// void nvme_complete_rq(struct request *req)
+
+// /@start[arg0]/
+
+/*
+  $req = (struct request *)arg0;
+  $cmd = (struct nvme_command *)@cmd[arg0];
+  $nvme_cmd = (struct nvme_command *)cmd = nvme_req(req)->cmd;
+
+  $disk = $req->rq_disk;
+  $opcode = $cmd->common.opcode & 0xff;
+  @usecs[$disk->disk_name, @ioopcode[$opcode]] =
+      hist((nsecs - @start[arg0]) / 1000);
+  delete(@start[tid]); delete(@cmd[tid]);
+	*/
+
+
+https://kernelize.xyz/ebpf-bpftrace-oneliner
+https://www.brendangregg.com/BPF/bpftrace-cheat-sheet.html
+https://github.com/bpftrace/bpftrace/blob/master/docs/reference_guide.md
+
+
+blaze run -c opt cloud/vmm/contrib:vanadium -- --uid= --port=9999 --cpus=44 --ram=16384 \
+  --virtio_scsi_disks ${HOME}/data/vm/ubuntu-2404-lts-amd64--basic-vit-20250130-1716_mogo_spdk.img \
+  --root_ephemeral=false --allow_mwait --nvme_passthrough_bdf=0000:3b:00.1 \
+  --info_log_file=${HOME}/vmm.log --com2=/dev/pts/3 --vmodule=pci_msix=2 --net=yes \
+  --virtio_9p_path=/usr/local/google/home/mogo/src/exp/perf/bpf/
+
+mount -t 9p -o trans=virtio,msize=1048576 ABCD /mnt
+bpftrace /mnt/nvme_latency.bt
+bpftrace /mnt/nvme_latency_trace.bt
+
+dd if=/dev/nvme0n1 of=/dev/null bs=4K count=1
+
+
+cat /sys/kernel/debug/kprobes/list
+
+bpftrace -I /usr/src/linux-headers-$(uname -r)/ /mnt/mynvmelatency.bt
+
+
+dd if=/dev/nvme0n1 of=/dev/null bs=4K count=1 iflag=direct
+dd if=/dev/zero of=/dev/nvme0n1 bs=4K count=1 oflag=direct
+
+
+fio --name=read_lat_1 --thread=1 \
+  --ioengine=libaio --size=12K --filesize=100% --direct=1 --randrepeat=0 --norandommap=1 \
+    --filename=/dev/nvme0n1   --rw=randread --iodepth=1 --bs=4K
+
+sudo bpftrace -l | grep nvme.*cmd
+
+root@Ubuntu2404:~# sudo bpftrace -l | grep nvme.*cmd
+kfunc:vmlinux:__probestub_nvme_setup_cmd
+kfunc:vmlinux:__traceiter_nvme_setup_cmd
+kfunc:vmlinux:nvme_cleanup_cmd
+kfunc:vmlinux:nvme_cmd_allowed
+kfunc:vmlinux:nvme_dev_uring_cmd
+kfunc:vmlinux:nvme_ns_chr_uring_cmd
+kfunc:vmlinux:nvme_ns_chr_uring_cmd_iopoll
+kfunc:vmlinux:nvme_ns_head_chr_uring_cmd
+kfunc:vmlinux:nvme_ns_uring_cmd
+kfunc:vmlinux:nvme_setup_cmd
+kfunc:vmlinux:nvme_submit_sync_cmd
+kfunc:vmlinux:nvme_trace_parse_admin_cmd
+kfunc:vmlinux:nvme_trace_parse_fabrics_cmd
+kfunc:vmlinux:nvme_trace_parse_nvm_cmd
+kfunc:vmlinux:nvme_uring_cmd_end_io
+kfunc:vmlinux:nvme_uring_cmd_io
+kfunc:vmlinux:nvme_user_cmd64
+kprobe:__nvme_submit_sync_cmd
+kprobe:__probestub_nvme_setup_cmd
+kprobe:__traceiter_nvme_setup_cmd
+kprobe:nvme_cleanup_cmd
+kprobe:nvme_cmd_allowed
+kprobe:nvme_dev_uring_cmd
+kprobe:nvme_ns_chr_uring_cmd
+kprobe:nvme_ns_chr_uring_cmd_iopoll
+kprobe:nvme_ns_head_chr_uring_cmd
+kprobe:nvme_ns_uring_cmd
+kprobe:nvme_setup_cmd
+kprobe:nvme_submit_sync_cmd
+kprobe:nvme_submit_user_cmd
+kprobe:nvme_trace_parse_admin_cmd
+kprobe:nvme_trace_parse_fabrics_cmd
+kprobe:nvme_trace_parse_nvm_cmd
+kprobe:nvme_uring_cmd_end_io
+kprobe:nvme_uring_cmd_io
+kprobe:nvme_user_cmd.isra.0
+kprobe:nvme_user_cmd64
+rawtracepoint:nvme_setup_cmd
+tracepoint:nvme:nvme_setup_cmd
+
+
+root@Ubuntu2404:~# sudo bpftrace -l | grep nvme.*complete
+kfunc:vmlinux:__probestub_nvme_complete_rq
+kfunc:vmlinux:__traceiter_nvme_complete_rq
+kfunc:vmlinux:nvme_complete_async_event
+kfunc:vmlinux:nvme_complete_batch_req
+kfunc:vmlinux:nvme_complete_rq
+kfunc:vmlinux:nvme_pci_complete_batch
+kfunc:vmlinux:nvme_pci_complete_rq
+kprobe:__probestub_nvme_complete_rq
+kprobe:__traceiter_nvme_complete_rq
+kprobe:nvme_complete_async_event
+kprobe:nvme_complete_batch_req
+kprobe:nvme_complete_rq
+kprobe:nvme_pci_complete_batch
+kprobe:nvme_pci_complete_rq
+rawtracepoint:nvme_complete_rq
+tracepoint:nvme:nvme_complete_rq
+
+
+root@Ubuntu2404:~# perf list | grep nvme
+  nvme:nvme_async_event                              [Tracepoint event]
+  nvme:nvme_complete_rq                              [Tracepoint event]
+  nvme:nvme_setup_cmd                                [Tracepoint event]
+  nvme:nvme_sq
+
+https://unix.stackexchange.com/questions/772857/where-do-i-trace-nvme-io-within-the-linux-driver
+root@Ubuntu2404:~# perf trace -e nvme:nvme_\*
+    0.000 fio/3218 nvme:nvme_setup_cmd(disk: "nvme0n1", qid: 3, opcode: 2, fctype: 1, cid: 448, nsid: 1, cdw10: 132542552314041)
+    0.333 fio/3218 nvme:nvme_setup_cmd(disk: "nvme0n1", qid: 3, opcode: 2, fctype: 1, cid: 4544, nsid: 1, cdw10: 132542552314193)
+    0.482 fio/3218 nvme:nvme_setup_cmd(disk: "nvme0n1", qid: 3, opcode: 2, fctype: 1, cid: 8640, nsid: 1, cdw10: 132542552314345)
+    0.205 :0/0 nvme:nvme_sq(disk: "nvme0n1", qid: 3, sq_head: 756, sq_tail: 756)
+    0.289 :0/0 nvme:nvme_complete_rq(disk: "nvme0n1", qid: 3, cid: 448)
+    0.427 :0/0 nvme:nvme_sq(disk: "nvme0n1", qid: 3, sq_head: 757, sq_tail: 757)
+    0.456 :0/0 nvme:nvme_complete_rq(disk: "nvme0n1", qid: 3, cid: 4544)
+    0.584 :0/0 nvme:nvme_sq(disk: "nvme0n1", qid: 3, sq_head: 758, sq_tail: 758)
+    0.608 :0/0 nvme:nvme_complete_rq(disk: "nvme0n1", qid: 3, cid: 8640)
+
+`perf list`
+
+https://bpftrace.org/hol/kernel-probes
+https://docs.kernel.org/bpf/kfuncs.html
+
+"third_party/linux_tools/src/tools/lib/bpf/libbpf.h" -file:third_party
+google3/net/bpf/core/event/bpf_event.h
+
+https://github.com/libbpf/libbpf-bootstrap/blob/master/README.md
+https://github.com/bpftrace/bpftrace
+
+Kernel stack:
+https://github.com/brendangregg/bpf-perf-tools-book/blob/master/originals/Ch09_Disks/biostacks.bt
+@reqstack[arg0] = kstack;
+
+every 1 second
+https://github.com/brendangregg/bpf-perf-tools-book/blob/master/originals/Ch09_Disks/biopattern.bt
+tracepoint:raw_syscalls:sys_enter { @syscalls = count(); }
+interval:1s { print(@syscalls); clear(@syscalls); }
+interval:s:1
+
+print time
+https://github.com/brendangregg/bpf-perf-tools-book/blob/master/originals/Ch09_Disks/biopattern.bt
+time("%H:%M:%S ");
+
+userspace app
+https://github.com/brendangregg/bpf-perf-tools-book/blob/master/originals/Ch13_Applications/mysqld_clat.bt
+usdt:/usr/sbin/mysqld:mysql:command__start
+
+attach multiple, print probe name
+https://github.com/bpftrace/bpftrace/blob/master/docs/language.md#probes
+kprobe:tcp_* {
+  printf("Entered: %s\n", probe);
+}
+
+probe sampling
+https://github.com/bpftrace/bpftrace/blob/master/docs/language.md#hardware
+hardware:cache-misses:1e6 { @[pid] = count(); }
+
+fentry and fexit instead of kfunc and kretfunc respectively
+https://github.com/bpftrace/bpftrace/blob/master/docs/language.md#fentry-and-fexit
+
+tid - threadid
+
+BPFTRACE_KERNEL_SOURCE and also BPFTRACE_KERNEL_BUILD
+
+================================================================================
+
+cat /sys/kernel/debug/tracing/events/nvme/nvme_setup_cmd/format
+name: nvme_setup_cmd
+ID: 1503
+format:
+  field:unsigned short common_type;  offset:0;  size:2;  signed:0;
+  field:unsigned char common_flags;  offset:2;  size:1;  signed:0;
+  field:unsigned char common_preempt_count;  offset:3;  size:1;  signed:0;
+  field:int common_pid;  offset:4;  size:4;  signed:1;
+
+  field:char disk[32];  offset:8;  size:32;  signed:0;
+  field:int ctrl_id;  offset:40;  size:4;  signed:1;
+  field:int qid;  offset:44;  size:4;  signed:1;
+  field:u8 opcode;  offset:48;  size:1;  signed:0;
+  field:u8 flags;  offset:49;  size:1;  signed:0;
+  field:u8 fctype;  offset:50;  size:1;  signed:0;
+  field:u16 cid;  offset:52;  size:2;  signed:0;
+  field:u32 nsid;  offset:56;  size:4;  signed:0;
+  field:bool metadata;  offset:60;  size:1;  signed:0;
+  field:u8 cdw10[24];  offset:61;  size:24;  signed:0;
+
+print fmt: "nvme%d: %sqid=%d, cmdid=%u, nsid=%u, flags=0x%x, meta=0x%x, cmd=(%s %s)", REC->ctrl_id, nvme_trace_disk_name(p, REC->disk), REC->qid, REC->cid, REC->nsid, REC->flags, REC->metadata, ((REC->opcode) == nvme_fabrics_command ? __print_symbolic(REC->fctype, { nvme_fabrics_type_property_set, "nvme_fabrics_type_property_set" }, { nvme_fabrics_type_connect, "nvme_fabrics_type_connect" }, { nvme_fabrics_type_property_get, "nvme_fabrics_type_property_get" }, { nvme_fabrics_type_auth_send, "nvme_fabrics_type_auth_send" }, { nvme_fabrics_type_auth_receive, "nvme_fabrics_type_auth_receive" }) : ((REC->qid) ? __print_symbolic(REC->opcode, { nvme_cmd_flush, "nvme_cmd_flush" }, { nvme_cmd_write, "nvme_cmd_write" }, { nvme_cmd_read, "nvme_cmd_read" }, { nvme_cmd_write_uncor, "nvme_cmd_write_uncor" }, { nvme_cmd_compare, "nvme_cmd_compare" }, { nvme_cmd_write_zeroes, "nvme_cmd_write_zeroes" }, { nvme_cmd_dsm, "nvme_cmd_dsm" }, { nvme_cmd_verify, "nvme_cmd_verify" }, { nvme_cmd_resv_register, "nvme_cmd_resv_register" }, { nvme_cmd_resv_report, "nvme_cmd_resv_report" }, { nvme_cmd_resv_acquire, "nvme_cmd_resv_acquire" }, { nvme_cmd_resv_release, "nvme_cmd_resv_release" }, { nvme_cmd_zone_mgmt_send, "nvme_cmd_zone_mgmt_send" }, { nvme_cmd_zone_mgmt_recv, "nvme_cmd_zone_mgmt_recv" }, { nvme_cmd_zone_append, "nvme_cmd_zone_append" }) : __print_symbolic(REC->opcode, { nvme_admin_delete_sq, "nvme_admin_delete_sq" }, { nvme_admin_create_sq, "nvme_admin_create_sq" }, { nvme_admin_get_log_page, "nvme_admin_get_log_page" }, { nvme_admin_delete_cq, "nvme_admin_delete_cq" }, { nvme_admin_create_cq, "nvme_admin_create_cq" }, { nvme_admin_identify, "nvme_admin_identify" }, { nvme_admin_abort_cmd, "nvme_admin_abort_cmd" }, { nvme_admin_set_features, "nvme_admin_set_features" }, { nvme_admin_get_features, "nvme_admin_get_features" }, { nvme_admin_async_event, "nvme_admin_async_event" }, { nvme_admin_ns_mgmt, "nvme_admin_ns_mgmt" }, { nvme_admin_activate_fw, "nvme_admin_activate_fw" }, { nvme_admin_download_fw, "nvme_admin_download_fw" }, { nvme_admin_dev_self_test, "nvme_admin_dev_self_test" }, { nvme_admin_ns_attach, "nvme_admin_ns_attach" }, { nvme_admin_keep_alive, "nvme_admin_keep_alive" }, { nvme_admin_directive_send, "nvme_admin_directive_send" }, { nvme_admin_directive_recv, "nvme_admin_directive_recv" }, { nvme_admin_virtual_mgmt, "nvme_admin_virtual_mgmt" }, { nvme_admin_nvme_mi_send, "nvme_admin_nvme_mi_send" }, { nvme_admin_nvme_mi_recv, "nvme_admin_nvme_mi_recv" }, { nvme_admin_dbbuf, "nvme_admin_dbbuf" }, { nvme_admin_format_nvm, "nvme_admin_format_nvm" }, { nvme_admin_security_send, "nvme_admin_security_send" }, { nvme_admin_security_recv, "nvme_admin_security_recv" }, { nvme_admin_sanitize_nvm, "nvme_admin_sanitize_nvm" }, { nvme_admin_get_lba_status, "nvme_admin_get_lba_status" }))), ((REC->opcode) == nvme_fabrics_command ? nvme_trace_parse_fabrics_cmd(p, REC->fctype, REC->cdw10) : ((REC->qid) ? nvme_trace_parse_nvm_cmd(p, REC->opcode, REC->cdw10) : nvme_trace_parse_admin_cmd(p, REC->opcode, REC->cdw10)))
+
+================================================================================
+
+cat /sys/kernel/debug/tracing/events/nvme/nvme_complete_rq/format
+
+name: nvme_complete_rq
+ID: 1540
+format:
+  field:unsigned short common_type;  offset:0;  size:2;  signed:0;
+  field:unsigned char common_flags;  offset:2;  size:1;  signed:0;
+  field:unsigned char common_preempt_count;  offset:3;  size:1;  signed:0;
+  field:int common_pid;  offset:4;  size:4;  signed:1;
+
+  field:char disk[32];  offset:8;  size:32;  signed:0;
+  field:int ctrl_id;  offset:40;  size:4;  signed:1;
+  field:int qid;  offset:44;  size:4;  signed:1;
+  field:int cid;  offset:48;  size:4;  signed:1;
+  field:u64 result;  offset:56;  size:8;  signed:0;
+  field:u8 retries;  offset:64;  size:1;  signed:0;
+  field:u8 flags;  offset:65;  size:1;  signed:0;
+  field:u16 status;  offset:66;  size:2;  signed:0;
+
+print fmt: "nvme%d: %sqid=%d, cmdid=%u, res=%#llx, retries=%u, flags=0x%x, status=%#x", REC->ctrl_id, nvme_trace_disk_name(p, REC->disk), REC->qid, REC->cid, REC->result, REC->retries, REC->flags, REC->status
+
+================================================================================
+
+https://docs.ebpf.io/concepts/core/
+bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
+
+BPF ringbuff / ring buff  vs perfbuff / perf buff
+https://nakryiko.com/posts/bpf-ringbuf/
+https://github.com/anakryiko/bpf-ringbuf-examples
+
+https://patchwork.ozlabs.org/project/netdev/patch/20200529075424.3139988-5-andriin@fb.com/
+Single-producer, parallel producer
+==================================
+rb-libbpf            12.054 ± 0.320M/s (drops 0.000 ± 0.000M/s)
+rb-custom            8.158 ± 0.118M/s (drops 0.001 ± 0.003M/s)
+pb-libbpf            0.931 ± 0.007M/s (drops 0.000 ± 0.000M/s)
+pb-custom            0.965 ± 0.003M/s (drops 0.000 ± 0.000M/s)
+
+Single-producer, parallel producer, sampled notification
+========================================================
+rb-libbpf            11.563 ± 0.067M/s (drops 0.000 ± 0.000M/s)
+rb-custom            15.895 ± 0.076M/s (drops 0.000 ± 0.000M/s)
+pb-libbpf            9.889 ± 0.032M/s (drops 0.000 ± 0.000M/s)
+pb-custom            9.866 ± 0.028M/s (drops 0.000 ± 0.000M/s)
+
+
+https://blogs.oracle.com/linux/intro-to-bcc-2
+
+
+root@mogoreanu:/usr/local/google/home/mogo# strace -ebpf python3 /tmp/nvme_latency_bcc_kp.py
+bpf(BPF_PROG_LOAD, {prog_type=BPF_PROG_TYPE_SOCKET_FILTER, insn_cnt=2, insns=0x7ffc1d4a6ca0, license="GPL", log_level=0, log_size=0, log_buf=NULL, kern_version=KERNEL_VERSION(0, 0, 0), prog_flags=0, prog_name="", prog_ifindex=0, expected_attach_type=BPF_CGROUP_INET_INGRESS, prog_btf_fd=0, func_info_rec_size=0, func_info=NULL, func_info_cnt=0, line_info_rec_size=0, line_info=NULL, line_info_cnt=0, attach_btf_id=0, attach_prog_fd=0, fd_array=NULL}, 148) = 3
+bpf(BPF_BTF_LOAD, {btf="\237\353\1\0\30\0\0\0\0\0\0\0\224\r\0\0\224\r\0\0J\16\0\0\0\0\0\0\0\0\0\2"..., btf_log_buf=NULL, btf_size=7158, btf_log_size=0, btf_log_level=0}, 40) = 3
+bpf(BPF_PROG_LOAD, {prog_type=BPF_PROG_TYPE_SOCKET_FILTER, insn_cnt=2, insns=0x7ffc1d4a6970, license="GPL", log_level=0, log_size=0, log_buf=NULL, kern_version=KERNEL_VERSION(0, 0, 0), prog_flags=0, prog_name="libbpf_nametest", prog_ifindex=0, expected_attach_type=BPF_CGROUP_INET_INGRESS, prog_btf_fd=0, func_info_rec_size=0, func_info=NULL, func_info_cnt=0, line_info_rec_size=0, line_info=NULL, line_info_cnt=0, attach_btf_id=0, attach_prog_fd=0, fd_array=NULL}, 148) = 4
+bpf(BPF_MAP_CREATE, {map_type=BPF_MAP_TYPE_ARRAY, key_size=4, value_size=8, max_entries=64, map_flags=0, inner_map_fd=0, map_name="req_lat_hist_us", map_ifindex=0, btf_fd=3, btf_key_type_id=11, btf_value_type_id=13, btf_vmlinux_value_type_id=0, map_extra=0}, 80) = 4
+bpf(BPF_MAP_CREATE, {map_type=BPF_MAP_TYPE_HASH, key_size=8, value_size=8, max_entries=4096, map_flags=0, inner_map_fd=0, map_name="in_flight_reqs", map_ifindex=0, btf_fd=3, btf_key_type_id=1, btf_value_type_id=13, btf_vmlinux_value_type_id=0, map_extra=0}, 80) = 5
+bpf(BPF_PROG_LOAD,
+    {prog_type=BPF_PROG_TYPE_KPROBE, insn_cnt=64, insns=0x7f985a784000,
+    license="GPL", log_level=0, log_size=0, log_buf=NULL,
+    kern_version=KERNEL_VERSION(6, 16, 9), prog_flags=0,
+    prog_name="nvme_setup_cmd_", prog_ifindex=0,
+    expected_attach_type=BPF_CGROUP_INET_INGRESS, prog_btf_fd=3,
+    func_info_rec_size=8, func_info=0x2835e540, func_info_cnt=1,
+    line_info_rec_size=16, line_info=0x2467a0a0, line_info_cnt=31,
+    attach_btf_id=0, attach_prog_fd=0, fd_array=NULL}, 152) = 6
+bpf(BPF_PROG_LOAD, {prog_type=BPF_PROG_TYPE_KPROBE, insn_cnt=77, insns=0x7f985a784200, license="GPL", log_level=0, log_size=0, log_buf=NULL, kern_version=KERNEL_VERSION(6, 16, 9), prog_flags=0, prog_name="nvme_complete_r", prog_ifindex=0, expected_attach_type=BPF_CGROUP_INET_INGRESS, prog_btf_fd=3, func_info_rec_size=8, func_info=0x2835e540, func_info_cnt=1, line_info_rec_size=16, line_info=0x28e0b980, line_info_cnt=32, attach_btf_id=0, attach_prog_fd=0, fd_array=NULL}, 152) = 8
+
+BPF API include/uapi/linux/bpf.h
+  bpf_map_lookup_elem
+  bpf_probe_read
+  bpf_trace_printk
+  ...
+
+Documentation/networking/filter.txt
+
+BCC vs libbpf + CO-RE:
+https://pingcap.medium.com/why-we-switched-from-bcc-tools-to-libbpf-tools-for-bpf-performance-analysis-12fa0670e012
+https://facebookmicrosites.github.io/bpf/blog/2020/02/20/bcc-to-libbpf-howto-guide.html#why-libbpf-and-bpf-co-re
+
+bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
+bpftool btf dump file /sys/kernel/btf/nvme_core format c > nvme_core.h
