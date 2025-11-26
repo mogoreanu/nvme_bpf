@@ -18,30 +18,54 @@
 #include "absl/log/initialize.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
+#include "absl/strings/ascii.h"
 #include "absl/strings/str_join.h"
+#include "absl/strings/strip.h"
 #include "absl/time/time.h"
 #include "nvme_trace.skel.h"
 
 /*
-bazel build :nvme_trace
-sudo bazel-bin/nvme_trace
+bazel build :nvme_trace && sudo bazel-bin/nvme_trace
 */
+
+ABSL_DECLARE_FLAG(int, stderrthreshold);
 
 static volatile bool exiting = false;
 static void sig_handler(int sig) { exiting = true; }
 
 static int libbpf_print_fn(enum libbpf_print_level level, const char* format,
                            va_list args) {
-  return vfprintf(stderr, format, args);
+  if (absl::GetFlag(FLAGS_stderrthreshold) == 0 || ABSL_VLOG_IS_ON(1)) {
+    return vfprintf(stderr, format, args);
+  }
+  return 0;
+  // TODO(mogo): Can't get rid of the trailing newlines properly.
+  //   std::string buf;
+  //   buf.resize(256);
+  //   int r = vsnprintf(buf.data(), buf.size(), format, args);
+  //   if (r < 0) {
+  //     LOG(ERROR) << "Failed to print libbpf log message";
+  //     return 0;
+  //   }
+  //   absl::StripAsciiWhitespace(&buf);
+  //   auto stripped_buf = absl::StripSuffix(buf, "\n");
+  //   stripped_buf = absl::StripSuffix(stripped_buf, "\r");
+  //   stripped_buf = absl::StripSuffix(stripped_buf, "\n");
+  //   uint ur = r;
+  //   if (ur < buf.size()) {
+  //     LOG(INFO) << stripped_buf;
+  //   } else {
+  //     LOG(INFO) << stripped_buf << "...(truncated)";
+  //   }
+  //   return 0;
 }
 
 int HandleNvmeSubmitEvent(const nvme_submit_trace_event& se) {
   std::cout << "Submit nvme" << se.ctrl_id << ": qid=" << se.qid
-            << ", cmdid=" << se.cid << ", nsid=" << se.nsid
-            << ", flags=0x" << std::hex << static_cast<int>(se.flags)
-            << ", meta=0x" << std::hex << static_cast<int>(se.metadata)
-            << ", opcode=" << std::dec << static_cast<int>(se.opcode)
-            << std::endl;
+            << ", cmdid=" << se.cid << ", nsid=" << se.nsid << ", flags=0x"
+            << std::hex << static_cast<int>(se.flags) << ", meta=0x" << std::hex
+            << static_cast<int>(se.metadata) << ", opcode=" << std::dec
+            << static_cast<int>(se.opcode) << std::endl;
   return 0;
 }
 
@@ -140,8 +164,7 @@ int main(int argc, char** argv) {
   }
 
 cleanup:
-  /* Clean up */
   ring_buffer__free(nvme_trace_events);
   nvme_trace_bpf__destroy(skel);
-  return err < 0 ? -err : 0;
+  return err < 0 ? -err : EXIT_SUCCESS;
 }
