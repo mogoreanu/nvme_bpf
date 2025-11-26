@@ -1,6 +1,7 @@
 #include "nvme_latency.h"
 
 #include <argp.h>
+#include <bpf/bpf.h>
 #include <bpf/libbpf.h>
 #include <signal.h>
 #include <stdio.h>
@@ -41,8 +42,6 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char* format,
   return 0;
 }
 
-
-
 int main(int argc, char** argv) {
   absl::ParseCommandLine(argc, argv);
   absl::InitializeLog();
@@ -77,7 +76,42 @@ int main(int argc, char** argv) {
   std::cout << "Successfully started!" << std::endl;
 
   while (!exiting) {
-    absl::SleepFor(absl::Milliseconds(10));
+    absl::SleepFor(absl::Seconds(1));
+    do {
+      int r, fd = bpf_map__fd(skel->maps.hists);
+      if (err < 0) {
+        std::cerr << "Failed to get the latency histogram map fd. err=" << r
+                  << std::endl;
+        break;
+      }
+      struct latency_hist hist;
+
+      struct latency_hist_key lookup_key = {};
+      lookup_key.ctrl_id = 0;
+      lookup_key.opcode = 0;
+      r = bpf_map_lookup_elem(fd, &lookup_key, &hist);
+      if (r < 0) {
+        std::cout << "Failed to find the latency histogram." << std::endl;
+        break;
+      }
+      std::cout << "" << hist.slots[0] << std::endl;
+      //   struct latency_hist_key next_key;
+      //   while (!bpf_map_get_next_key(fd, &lookup_key, &next_key)) {
+      //     err = bpf_map_lookup_elem(fd, &next_key, &hist);
+      //     if (err < 0) {
+      //       fprintf(stderr, "failed to lookup hist: %d\n", err);
+      //       return -1;
+      //     }
+      //     if (env.per_disk) {
+      //       partition = partitions__get_by_dev(partitions, next_key.dev);
+      //       printf("\ndisk = %s\t", partition ? partition->name : "Unknown");
+      //     }
+      //     if (env.per_flag) print_cmd_flags(next_key.cmd_flags);
+      //     printf("\n");
+      //     print_log2_hist(hist.slots, MAX_SLOTS, units);
+      //     lookup_key = next_key;
+      //   }
+    } while (false);
   }
 
 cleanup:

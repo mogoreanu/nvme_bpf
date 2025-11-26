@@ -13,6 +13,10 @@ struct request_key {
     u16 cid;
 };
 
+struct request_data {
+    u64 start_ns;
+};
+
 struct latency_hist_key {
 	u32 ctrl_id;
 	u32 opcode;
