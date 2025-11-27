@@ -8,6 +8,7 @@
                 "${workspaceFolder}/bazel-nvme_bpf/external/googletest+/googletest/include",
                 "${workspaceFolder}/bazel-nvme_bpf/external/google_benchmark+/include",
                 "${workspaceFolder}/bazel-out/k8-fastbuild/bin",
+                "${workspaceFolder}/libbpf/src/",
                 "${workspaceFolder}/bazel-out/k8-fastbuild/bin/_virtual_includes/libbpf/",
                 // The generic include doesn't seem to work because uname is not
                 // invoked :(.

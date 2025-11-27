@@ -5,6 +5,9 @@
 		}
     ],
     "settings": {
-        "editor.renderWhitespace": "boundary"
+        "editor.renderWhitespace": "boundary",
+        "files.associations": {
+            "*.h": "cpp"
+        }
     }
 }
