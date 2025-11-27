@@ -27,6 +27,7 @@
 
 /*
 bazel build :nvme_latency && sudo bazel-bin/nvme_latency
+bazel build :nvme_latency && sudo bazel-bin/nvme_latency --stderrthreshold=0
 */
 
 ABSL_DECLARE_FLAG(int, stderrthreshold);
