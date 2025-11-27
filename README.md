@@ -12,7 +12,14 @@ the examples, package names may vary across distros.
 On Ubuntu/Debian, you need:
 ```shell
 $ apt install clang libelf1 libelf-dev zlib1g-dev
+$ apt install bpftool
 ```
+
+You may have to make bpftool available for non-root users
+```shell
+$ cp /usr/sbin/bpftool /usr/bin/
+```
+
 
 ## Getting the source code
 
