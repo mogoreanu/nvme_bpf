@@ -36,6 +36,8 @@ int handle_nvme_setup_cmd(struct trace_event_raw_nvme_setup_cmd* ctx) {
   //            ctx->opcode);
 
   u64 ts = bpf_ktime_get_ns();
+  // Important to initialize the key, outherwise garbage padding (probably) may
+  // lead to lookup failures.
   struct request_key req_key = {};
   req_key.ctrl_id = ctx->ctrl_id;
   req_key.qid = ctx->qid;
@@ -55,6 +57,9 @@ int handle_nvme_complete_rq(struct trace_event_raw_nvme_complete_rq* ctx) {
   // bpf_printk("nvme_complete_rq: PID %d, disk=%s, qid=%d, cid=%d\n",
   //            bpf_get_current_pid_tgid() >> 32, ctx->disk, ctx->qid,
   //            ctx->cid);
+
+  // Important to initialize the key, outherwise garbage padding (probably) may
+  // lead to lookup failures.
   struct request_key req_key = {};
   req_key.ctrl_id = ctx->ctrl_id;
   req_key.qid = ctx->qid;
@@ -63,10 +68,13 @@ int handle_nvme_complete_rq(struct trace_event_raw_nvme_complete_rq* ctx) {
   struct request_data* req_data;
   req_data = bpf_map_lookup_elem(&in_flight, &req_key);
   if (req_data == NULL) {
-    // TODO(mogo): Record missed starts.
+    // TODO(mogo): Record missed starts. We expect some missing entries at the
+		// very beginning on the operation, but a continuous increase may indicate
+		// either logic errors or in-flight map overflow.
     return 0;
   }
-  u64 delta_ns = bpf_ktime_get_ns() - req_data->start_ns;
+  u64 ts = bpf_ktime_get_ns();
+  u64 delta_ns = ts - req_data->start_ns;
 
   struct latency_hist_key hist_key = {};
   hist_key.ctrl_id = 0;
@@ -78,6 +86,7 @@ int handle_nvme_complete_rq(struct trace_event_raw_nvme_complete_rq* ctx) {
     bpf_map_update_elem(&hists, &hist_key, &new_hist, BPF_ANY);
     hist = bpf_map_lookup_elem(&hists, &hist_key);
     if (!hist) {
+      // TODO(mogo): Record histogram overflow.
       goto cleanup;
     }
   }
