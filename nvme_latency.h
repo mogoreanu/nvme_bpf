@@ -1,6 +1,7 @@
 #ifndef NVME_LATENCY_H_
 #define NVME_LATENCY_H_
 
+typedef unsigned char u8;
 typedef short unsigned int u16;
 typedef unsigned int u32;
 typedef unsigned long long u64;
@@ -15,15 +16,18 @@ struct request_key {
 
 struct request_data {
     u64 start_ns;
+    u8 opcode;
 };
 
 struct latency_hist_key {
 	u32 ctrl_id;
-	u32 opcode;
+	u8 opcode;
 };
 
 struct latency_hist {
 	u64 slots[LATENCY_MAX_SLOTS];
+    u64 total_sum;
+    u64 total_count;
 };
 
 

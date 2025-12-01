@@ -1,3 +1,4 @@
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 load("bpf.bzl", "bpf_program", "bpf_skel")
 
@@ -125,8 +126,10 @@ bpf_program(
     name = "nvme_latency_bpf_o",
     src = "nvme_latency.bpf.c",
     hdrs = [
+        "bits.bpf.h",
         "nvme_core.h",
         "nvme_latency.h",
+        "types.bpf.h",
     ],
     bpf_object = "nvme_latency.bpf.o",
 )
@@ -142,6 +145,8 @@ cc_binary(
     srcs = [
         "nvme_latency.cc",
         "nvme_latency.h",
+        "bits.bpf.h",
+        "types.bpf.h",
         ":nvme_latency_skel_h",
     ],
     # Link against system libraries required by libbpf (elf, zlib)
@@ -159,5 +164,19 @@ cc_binary(
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/time",
+    ],
+)
+
+cc_test(
+    name = "bits_bpf_test",
+    srcs = [
+        "bits.bpf.h",
+        "types.bpf.h",
+        "bits_bpf_test.cc",
+    ],
+    deps = [
+        "@abseil-cpp//absl/log",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
     ],
 )
