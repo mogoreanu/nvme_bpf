@@ -25,7 +25,7 @@ struct latency_hist_key {
 };
 
 struct latency_hist {
-	u64 slots[LATENCY_MAX_SLOTS];
+	u64 slots[LATENCY_MAX_SLOTS + 1];
     u64 total_sum;
     u64 total_count;
 };

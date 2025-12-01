@@ -36,6 +36,9 @@ ABSL_DECLARE_FLAG(int, stderrthreshold);
 ABSL_FLAG(int, ctrl_id, -1,
           "NVMe controller ID to filter on, -1 for all controllers");
 
+ABSL_FLAG(int, lat_min_us, -1, "");
+ABSL_FLAG(int, lat_shift, -1, "");
+
 static volatile bool exiting = false;
 static void sig_handler(int sig) { exiting = true; }
 
@@ -46,6 +49,9 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char* format,
   }
   return 0;
 }
+
+int global_lat_min_us = 0;
+int global_lat_shift = 0;
 
 absl::Status PrintHist(const struct latency_hist& hist) {
   int first_nonzero_slot = 0;
@@ -64,10 +70,26 @@ absl::Status PrintHist(const struct latency_hist& hist) {
   }
 
   uint64_t computed_total_count = 0;
+
+  if (hist.slots[LATENCY_MAX_SLOTS] != 0) {
+    std::cout << "  ["
+              << bpf_bucket_low(LATENCY_MAX_SLOTS, global_lat_min_us,
+                                global_lat_shift, LATENCY_MAX_SLOTS)
+              << "us - "
+              << bpf_bucket_high(LATENCY_MAX_SLOTS, global_lat_min_us,
+                                 global_lat_shift, LATENCY_MAX_SLOTS)
+              << "us): " << hist.slots[LATENCY_MAX_SLOTS] << std::endl;
+    computed_total_count += hist.slots[LATENCY_MAX_SLOTS];
+  }
+
   for (int slot = first_nonzero_slot; slot <= last_nonzero_slot; ++slot) {
-    std::cout << "  [" << bpf_bucket_low(slot) << "us - "
-              << bpf_bucket_high(slot) << "us): " << hist.slots[slot]
-              << std::endl;
+    std::cout << "  ["
+              << bpf_bucket_low(slot, global_lat_min_us, global_lat_shift,
+                                LATENCY_MAX_SLOTS)
+              << "us - "
+              << bpf_bucket_high(slot, global_lat_min_us, global_lat_shift,
+                                 LATENCY_MAX_SLOTS)
+              << "us): " << hist.slots[slot] << std::endl;
     computed_total_count += hist.slots[slot];
   }
   if (computed_total_count != hist.total_count) {
@@ -186,6 +208,17 @@ int main(int argc, char** argv) {
   if (filter_ctrl_id >= 0) {
     skel->rodata->filter_ctrl_id = filter_ctrl_id;
   }
+  auto flag_lat_min_us = absl::GetFlag(FLAGS_lat_min_us);
+  if (flag_lat_min_us >= 0) {
+    skel->rodata->latency_min = flag_lat_min_us;
+  }
+  global_lat_min_us = skel->rodata->latency_min;
+
+  auto flag_lat_shift = absl::GetFlag(FLAGS_lat_shift);
+  if (flag_lat_shift >= 0) {
+    skel->rodata->latency_shift = flag_lat_shift;
+  }
+  global_lat_shift = skel->rodata->latency_shift;
 
   err = nvme_latency_bpf__load(skel);
   if (err) {
@@ -205,32 +238,6 @@ int main(int argc, char** argv) {
   while (!exiting) {
     absl::SleepFor(absl::Seconds(1));
     PrintAllHists(skel).IgnoreError();
-    // do {
-    //   int fd = bpf_map__fd(skel->maps.hists);
-    //   if (fd < 0) {
-    //     if (fd == -1) {
-    //       std::cerr << "BPF latency histogram map not created. " <<
-    //       std::endl;
-    //     } else {
-    //       std::cerr << "BPF latency histogram map error. err=" << fd
-    //                 << std::endl;
-    //     }
-    //     break;
-    //   }
-    //   struct latency_hist hist;
-
-    //   struct latency_hist_key lookup_key = {};
-    //   lookup_key.ctrl_id = 0;
-    //   lookup_key.opcode = 0;
-    //   int r = bpf_map_lookup_elem(fd, &lookup_key, &hist);
-    //   if (r < 0) {
-    //     std::cout << "Failed to find the histogram by key." << std::endl;
-    //     PrintAllHists(skel).IgnoreError();
-    //     PrintAllInFlight(skel).IgnoreError();
-    //     break;
-    //   }
-    //   std::cout << "" << hist.slots[0] << std::endl;
-    // } while (false);
   }
 
 cleanup:

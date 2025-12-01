@@ -18,6 +18,8 @@ char LICENSE[] SEC("license") = "MIT";
 
 const volatile __u32 filter_ctrl_id = ALL_CTRL_ID;
 const volatile __u8 filter_opcode = ALL_OPCODE;
+const volatile __u64 latency_min = 0;
+const volatile __u64 latency_shift = 0;
 
 struct {
   __uint(type, BPF_MAP_TYPE_HASH);
@@ -108,12 +110,14 @@ int handle_nvme_complete_rq(struct trace_event_raw_nvme_complete_rq* ctx) {
     }
   }
   u64 delta_us = (ts - req_data->start_ns) / 1000;
-  int slot = bpf_log2l(delta_us);
-  if (slot < LATENCY_MAX_SLOTS) {
-    __sync_fetch_and_add(&hist->slots[slot], 1);
-  }
+
   __sync_fetch_and_add(&hist->total_count, 1);
   __sync_fetch_and_add(&hist->total_sum, delta_us);
+
+  int slot = bpf_get_bucket(delta_us, latency_min, latency_shift, LATENCY_MAX_SLOTS);
+  if (slot >= 0) {
+    __sync_fetch_and_add(&hist->slots[slot], 1);
+  }
 
 cleanup:
   bpf_map_delete_elem(&in_flight, &req_key);
