@@ -1,5 +1,5 @@
-#ifndef __NVME_CORE_H__
-#define __NVME_CORE_H__
+#ifndef __VMLINUX_H__
+#define __VMLINUX_H__
 
 #ifndef BPF_NO_PRESERVE_ACCESS_INDEX
 #pragma clang attribute push (__attribute__((preserve_access_index)), apply_to = record)
@@ -134506,11 +134506,9 @@ extern void cubictcp_state(struct sock *sk, u8 new_state) __weak __ksym;
 extern struct hid_bpf_ctx *hid_bpf_allocate_context(unsigned int hid_id) __weak __ksym;
 extern __u8 *hid_bpf_get_data(struct hid_bpf_ctx *ctx, unsigned int offset, const size_t rdwr_buf_size) __weak __ksym;
 extern int hid_bpf_hw_output_report(struct hid_bpf_ctx *ctx, __u8 *buf, size_t buf__sz) __weak __ksym;
-extern int hid_bpf_hw_request(struct hid_bpf_ctx *ctx, __u8 *buf, size_t buf__sz, enum hid_report_type rtype, enum hid_class_request reqtype) __weak __ksym;
 extern int hid_bpf_input_report(struct hid_bpf_ctx *ctx, enum hid_report_type type, u8 *buf, const size_t buf__sz) __weak __ksym;
 extern void hid_bpf_release_context(struct hid_bpf_ctx *ctx) __weak __ksym;
 extern int hid_bpf_try_input_report(struct hid_bpf_ctx *ctx, enum hid_report_type type, u8 *buf, const size_t buf__sz) __weak __ksym;
-extern bool scx_bpf_consume(u64 dsq_id) __weak __ksym;
 extern int scx_bpf_cpu_node(s32 cpu) __weak __ksym;
 extern struct rq *scx_bpf_cpu_rq(s32 cpu) __weak __ksym;
 extern u32 scx_bpf_cpuperf_cap(s32 cpu) __weak __ksym;
@@ -134518,14 +134516,10 @@ extern u32 scx_bpf_cpuperf_cur(s32 cpu) __weak __ksym;
 extern void scx_bpf_cpuperf_set(s32 cpu, u32 perf) __weak __ksym;
 extern s32 scx_bpf_create_dsq(u64 dsq_id, s32 node) __weak __ksym;
 extern void scx_bpf_destroy_dsq(u64 dsq_id) __weak __ksym;
-extern void scx_bpf_dispatch(struct task_struct *p, u64 dsq_id, u64 slice, u64 enq_flags) __weak __ksym;
 extern void scx_bpf_dispatch_cancel(void) __weak __ksym;
 extern bool scx_bpf_dispatch_from_dsq(struct bpf_iter_scx_dsq *it__iter, struct task_struct *p, u64 dsq_id, u64 enq_flags) __weak __ksym;
-extern void scx_bpf_dispatch_from_dsq_set_slice(struct bpf_iter_scx_dsq *it__iter, u64 slice) __weak __ksym;
-extern void scx_bpf_dispatch_from_dsq_set_vtime(struct bpf_iter_scx_dsq *it__iter, u64 vtime) __weak __ksym;
 extern u32 scx_bpf_dispatch_nr_slots(void) __weak __ksym;
 extern void scx_bpf_dispatch_vtime(struct task_struct *p, u64 dsq_id, u64 slice, u64 vtime, u64 enq_flags) __weak __ksym;
-extern bool scx_bpf_dispatch_vtime_from_dsq(struct bpf_iter_scx_dsq *it__iter, struct task_struct *p, u64 dsq_id, u64 enq_flags) __weak __ksym;
 extern void scx_bpf_dsq_insert(struct task_struct *p, u64 dsq_id, u64 slice, u64 enq_flags) __weak __ksym;
 extern void scx_bpf_dsq_insert_vtime(struct task_struct *p, u64 dsq_id, u64 slice, u64 vtime, u64 enq_flags) __weak __ksym;
 extern bool scx_bpf_dsq_move(struct bpf_iter_scx_dsq *it__iter, struct task_struct *p, u64 dsq_id, u64 enq_flags) __weak __ksym;
@@ -134572,4 +134566,4 @@ extern u32 tcp_slow_start(struct tcp_sock *tp, u32 acked) __weak __ksym;
 #pragma clang attribute pop
 #endif
 
-#endif /* __NVME_CORE_H__ */
+#endif /* __VMLINUX_H__ */

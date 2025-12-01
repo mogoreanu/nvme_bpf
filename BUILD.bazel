@@ -36,7 +36,11 @@ cc_library(
 cc_library(
     name = "libbpf",
     srcs = glob(
-        ["libbpf/src/*.c", "libbpf/src/*.h", "libbpf/include/**/*.h"],
+        [
+            "libbpf/src/*.c",
+            "libbpf/src/*.h",
+            "libbpf/include/**/*.h",
+        ],
         exclude = ["libbpf/src/test_libbpf.c"],
     ),
     hdrs = glob(["libbpf/src/*.h"]),
@@ -55,34 +59,41 @@ cc_library(
         "-Wno-unused-parameter",
         "-Wno-missing-field-initializers",
     ],
+    include_prefix = "bpf",
     includes = [
-        "libbpf/src",
         "libbpf/include",
         "libbpf/include/uapi",
+        "libbpf/src",
     ],
     linkopts = [
         "-lelf",
         "-lz",
     ],
     strip_include_prefix = "libbpf/src",
-    include_prefix = "bpf",
     deps = [":libbpf_uapi_headers"],
+)
+
+genrule(
+    name = "nvme_core_gen_h",
+    srcs = [],
+    outs = ["nvme_core_gen.h"],
+    cmd = "bpftool btf dump file /sys/kernel/btf/nvme_core format c > $@",
 )
 
 bpf_program(
     name = "nvme_trace_bpf_o",
     src = "nvme_trace.bpf.c",
     hdrs = [
-        "nvme_trace.h",
         "nvme_core.h",
+        "nvme_trace.h",
     ],
-    bpf_object = "nvme_trace.bpf.o"
+    bpf_object = "nvme_trace.bpf.o",
 )
 
 bpf_skel(
-  name = "nvme_trace_skel_h",
-  bpf_object = ":nvme_trace_bpf_o",
-  skel_header = "nvme_trace.skel.h",
+    name = "nvme_trace_skel_h",
+    bpf_object = ":nvme_trace_bpf_o",
+    skel_header = "nvme_trace.skel.h",
 )
 
 cc_binary(
@@ -92,6 +103,11 @@ cc_binary(
         "nvme_trace.h",
         ":nvme_trace_skel_h",
     ],
+    # Link against system libraries required by libbpf (elf, zlib)
+    linkopts = [
+        "-lelf",
+        "-lz",
+    ],
     deps = [
         ":libbpf",
         "@abseil-cpp//absl/flags:flag",
@@ -103,24 +119,22 @@ cc_binary(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/time",
     ],
-    # Link against system libraries required by libbpf (elf, zlib)
-    linkopts = ["-lelf", "-lz"],
 )
 
 bpf_program(
     name = "nvme_latency_bpf_o",
     src = "nvme_latency.bpf.c",
     hdrs = [
-        "nvme_latency.h",
         "nvme_core.h",
+        "nvme_latency.h",
     ],
-    bpf_object = "nvme_latency.bpf.o"
+    bpf_object = "nvme_latency.bpf.o",
 )
 
 bpf_skel(
-  name = "nvme_latency_skel_h",
-  bpf_object = ":nvme_latency_bpf_o",
-  skel_header = "nvme_latency.skel.h",
+    name = "nvme_latency_skel_h",
+    bpf_object = ":nvme_latency_bpf_o",
+    skel_header = "nvme_latency.skel.h",
 )
 
 cc_binary(
@@ -130,6 +144,11 @@ cc_binary(
         "nvme_latency.h",
         ":nvme_latency_skel_h",
     ],
+    # Link against system libraries required by libbpf (elf, zlib)
+    linkopts = [
+        "-lelf",
+        "-lz",
+    ],
     deps = [
         ":libbpf",
         "@abseil-cpp//absl/flags:flag",
@@ -141,6 +160,4 @@ cc_binary(
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/time",
     ],
-    # Link against system libraries required by libbpf (elf, zlib)
-    linkopts = ["-lelf", "-lz"],
 )

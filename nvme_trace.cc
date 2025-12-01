@@ -61,8 +61,8 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char* format,
 }
 
 int HandleNvmeSubmitEvent(const nvme_submit_trace_event& se) {
-  std::cout << "Submit nvme" << se.ctrl_id << ": qid=" << se.qid
-            << ", cmdid=" << se.cid << ", nsid=" << se.nsid << ", flags=0x"
+  std::cout << "Submit nvme" << std::dec << se.ctrl_id << ": qid=" << se.qid
+            << ", cid=" << se.cid << ", nsid=" << se.nsid << ", flags=0x"
             << std::hex << static_cast<int>(se.flags) << ", meta=0x" << std::hex
             << static_cast<int>(se.metadata) << ", opcode=" << std::dec
             << static_cast<int>(se.opcode) << std::endl;
@@ -70,8 +70,8 @@ int HandleNvmeSubmitEvent(const nvme_submit_trace_event& se) {
 }
 
 int HandleNvmeCompleteEvent(const nvme_complete_trace_event& ce) {
-  std::cout << "Complete nvme" << ce.ctrl_id << ": qid=" << ce.qid
-            << ", cmdid=" << ce.cid << ", res=0x" << std::hex << ce.result
+  std::cout << "Complete nvme" << std::dec << ce.ctrl_id << ": qid=" << ce.qid
+            << ", cid=" << ce.cid << ", res=0x" << std::hex << ce.result
             << ", retries=" << std::dec << static_cast<int>(ce.retries)
             << ", flags=0x" << std::hex << static_cast<int>(ce.flags)
             << ", status=0x" << std::hex << ce.status << std::endl;

@@ -43,6 +43,83 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char* format,
   return 0;
 }
 
+absl::Status PrintAllHists(struct nvme_latency_bpf* skel) {
+  int fd = bpf_map__fd(skel->maps.hists);
+  if (fd < 0) {
+    if (fd == -1) {
+      std::cerr << "BPF latency histogram map not created. " << std::endl;
+    } else {
+      std::cerr << "BPF latency histogram map error. err=" << fd << std::endl;
+    }
+    return absl::InternalError("BPF map fd error");
+  }
+  struct latency_hist hist;
+
+  struct latency_hist_key lookup_key;
+  lookup_key.ctrl_id = std::numeric_limits<u32>::max();
+  lookup_key.opcode = 0;
+  struct latency_hist_key next_key;
+
+  if (bpf_map_get_next_key(fd, &lookup_key, &next_key) != 0) {
+    std::cout << "No entries in histogram map." << std::endl;
+    return absl::OkStatus();
+  }
+
+  while (0 == bpf_map_get_next_key(fd, &lookup_key, &next_key)) {
+    std::cout << "key: ctrl_id=" << next_key.ctrl_id
+              << ", opcode=" << next_key.opcode << std::endl;
+    int err = bpf_map_lookup_elem(fd, &next_key, &hist);
+    if (err < 0) {
+      std::cerr << "Histogram not found for key." << std::endl;
+      break;
+    }
+    lookup_key = next_key;
+  }
+  return absl::OkStatus();
+}
+
+absl::Status PrintAllInFlight(struct nvme_latency_bpf* skel) {
+  int fd = bpf_map__fd(skel->maps.in_flight);
+  if (fd < 0) {
+    if (fd == -1) {
+      std::cerr << "BPF in-flight map not created. " << std::endl;
+    } else {
+      std::cerr << "BPF in-flight map error. err=" << fd << std::endl;
+    }
+    return absl::InternalError("BPF map fd error");
+  }
+  struct request_data rdata;
+
+  struct request_key rkey;
+  rkey.ctrl_id = std::numeric_limits<u32>::max();
+  rkey.qid = 0;
+  rkey.cid = 0;
+  struct request_key rnkey;
+
+  uint32_t in_flight_count = 0;
+
+  if (bpf_map_get_next_key(fd, &rkey, &rnkey) != 0) {
+    std::cout << "No entries in in-flight request map." << std::endl;
+    return absl::OkStatus();
+  }
+
+  while (0 == bpf_map_get_next_key(fd, &rkey, &rnkey)) {
+    // std::cout << "key: ctrl_id=" << rkey.ctrl_id
+    //           << ", qid=" << rkey.qid
+    //           << ", cid=" << rkey.cid << std::endl;
+              ++in_flight_count;
+    int err = bpf_map_lookup_elem(fd, &rnkey, &rdata);
+    if (err < 0) {
+      std::cerr << "Histogram not found for key." << std::endl;
+      break;
+    }
+    rkey = rnkey;
+  }
+  std::cout << "Total in-flight requests: " << in_flight_count << std::endl;
+  return absl::OkStatus();
+}
+
+
 int main(int argc, char** argv) {
   absl::ParseCommandLine(argc, argv);
   absl::InitializeLog();
@@ -79,10 +156,14 @@ int main(int argc, char** argv) {
   while (!exiting) {
     absl::SleepFor(absl::Seconds(1));
     do {
-      int r, fd = bpf_map__fd(skel->maps.hists);
-      if (err < 0) {
-        std::cerr << "Failed to get the latency histogram map fd. err=" << r
-                  << std::endl;
+      int fd = bpf_map__fd(skel->maps.hists);
+      if (fd < 0) {
+        if (fd == -1) {
+          std::cerr << "BPF latency histogram map not created. " << std::endl;
+        } else {
+          std::cerr << "BPF latency histogram map error. err=" << fd
+                    << std::endl;
+        }
         break;
       }
       struct latency_hist hist;
@@ -90,9 +171,11 @@ int main(int argc, char** argv) {
       struct latency_hist_key lookup_key = {};
       lookup_key.ctrl_id = 0;
       lookup_key.opcode = 0;
-      r = bpf_map_lookup_elem(fd, &lookup_key, &hist);
+      int r = bpf_map_lookup_elem(fd, &lookup_key, &hist);
       if (r < 0) {
-        std::cout << "Failed to find the latency histogram." << std::endl;
+        std::cout << "Failed to find the histogram by key." << std::endl;
+        PrintAllHists(skel).IgnoreError();
+        PrintAllInFlight(skel).IgnoreError();
         break;
       }
       std::cout << "" << hist.slots[0] << std::endl;

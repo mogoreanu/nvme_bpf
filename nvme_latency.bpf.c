@@ -36,7 +36,7 @@ int handle_nvme_setup_cmd(struct trace_event_raw_nvme_setup_cmd* ctx) {
   //            ctx->opcode);
 
   u64 ts = bpf_ktime_get_ns();
-  struct request_key req_key;
+  struct request_key req_key = {};
   req_key.ctrl_id = ctx->ctrl_id;
   req_key.qid = ctx->qid;
   req_key.cid = ctx->cid;
@@ -51,18 +51,18 @@ int handle_nvme_setup_cmd(struct trace_event_raw_nvme_setup_cmd* ctx) {
 
 SEC("tp/nvme/nvme_complete_rq")
 int handle_nvme_complete_rq(struct trace_event_raw_nvme_complete_rq* ctx) {
-  bpf_printk("nvme_complete_rq");
+  // bpf_printk("nvme_complete_rq");
   // bpf_printk("nvme_complete_rq: PID %d, disk=%s, qid=%d, cid=%d\n",
   //            bpf_get_current_pid_tgid() >> 32, ctx->disk, ctx->qid,
   //            ctx->cid);
-  struct request_key req_key;
+  struct request_key req_key = {};
   req_key.ctrl_id = ctx->ctrl_id;
   req_key.qid = ctx->qid;
   req_key.cid = ctx->cid;
 
   struct request_data* req_data;
   req_data = bpf_map_lookup_elem(&in_flight, &req_key);
-  if (!req_data) {
+  if (req_data == NULL) {
     // TODO(mogo): Record missed starts.
     return 0;
   }
@@ -73,7 +73,7 @@ int handle_nvme_complete_rq(struct trace_event_raw_nvme_complete_rq* ctx) {
   hist_key.opcode = 0;
   struct latency_hist* hist;
   hist = bpf_map_lookup_elem(&hists, &hist_key);
-  if (!hist) {
+  if (hist == NULL) {
     struct latency_hist new_hist = {};
     bpf_map_update_elem(&hists, &hist_key, &new_hist, BPF_ANY);
     hist = bpf_map_lookup_elem(&hists, &hist_key);
