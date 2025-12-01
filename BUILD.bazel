@@ -87,6 +87,7 @@ bpf_program(
     hdrs = [
         "nvme_core.h",
         "nvme_trace.h",
+        "types.bpf.h",
     ],
     bpf_object = "nvme_trace.bpf.o",
 )
@@ -102,6 +103,7 @@ cc_binary(
     srcs = [
         "nvme_trace.cc",
         "nvme_trace.h",
+        "types.bpf.h",
         ":nvme_trace_skel_h",
     ],
     # Link against system libraries required by libbpf (elf, zlib)
@@ -143,9 +145,9 @@ bpf_skel(
 cc_binary(
     name = "nvme_latency",
     srcs = [
+        "bits.bpf.h",
         "nvme_latency.cc",
         "nvme_latency.h",
-        "bits.bpf.h",
         "types.bpf.h",
         ":nvme_latency_skel_h",
     ],
@@ -171,8 +173,8 @@ cc_test(
     name = "bits_bpf_test",
     srcs = [
         "bits.bpf.h",
-        "types.bpf.h",
         "bits_bpf_test.cc",
+        "types.bpf.h",
     ],
     deps = [
         "@abseil-cpp//absl/log",

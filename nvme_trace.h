@@ -1,10 +1,7 @@
 #ifndef __NVME_TRACE_H_
 #define __NVME_TRACE_H_
 
-typedef unsigned char u8;
-typedef short unsigned int u16;
-typedef unsigned int u32;
-typedef unsigned long long u64;
+#include "types.bpf.h"
 
 enum ActionType {
   kActionTypeUnknown = 0,
@@ -14,27 +11,27 @@ enum ActionType {
 
 struct nvme_submit_trace_event {
   enum ActionType action;
-  char disk[32];  
+  char disk[32];
   int ctrl_id;
-  int qid;  
+  int qid;
   u8 opcode;
-  u8 flags; 
+  u8 flags;
   u8 fctype;
-  u16 cid;  
-  u32 nsid; 
-  bool metadata; 
-  u8 cdw10[24];  
+  u16 cid;
+  u32 nsid;
+  bool metadata;
+  u8 cdw10[24];
 };
 struct nvme_complete_trace_event {
   enum ActionType action;
   char disk[32];
-  int ctrl_id;  
-  int qid;  
-  int cid;  
-  u64 result;  
-  u8 retries;  
-  u8 flags;  
-  u16 status;  
+  int ctrl_id;
+  int qid;
+  int cid;
+  u64 result;
+  u8 retries;
+  u8 flags;
+  u16 status;
 };
 
 struct nvme_trace_event {

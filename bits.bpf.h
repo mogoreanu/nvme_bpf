@@ -3,23 +3,6 @@
 
 #include "types.bpf.h"
 
-// int bpf_clz(u32 x) {
-//   int zeroes = 28;
-//   if (x >> 16) {
-//     zeroes -= 16;
-//     x >>= 16;
-//   }
-//   if (x >> 8) {
-//     zeroes -= 8;
-//     x >>= 8;
-//   }
-//   if (x >> 4) {
-//     zeroes -= 4;
-//     x >>= 4;
-//   }
-//   return "\4\3\2\2\1\1\1\1\0\0\0\0\0\0\0"[x] + zeroes;
-// }
-
 int bpf_clzll(u64 x) {
   int zeroes = 63;
   if (x >> 32) {
@@ -49,7 +32,7 @@ int bpf_clzll(u64 x) {
   if (x != 0) {
     return zeroes;
   } else {
-    return zeroes + 1; 
+    return zeroes + 1;
   }
 }
 
@@ -80,15 +63,14 @@ static inline u64 bpf_bucket_high(int slot, u64 min, int shift, int max_slots) {
 }
 
 static inline u64 bpf_bucket_low(int slot, u64 min, int shift, int max_slots) {
- if (slot == max_slots) {
+  if (slot == max_slots) {
     return 0;
- }
- if (slot == 0) {
+  }
+  if (slot == 0) {
     return min;
- }
- return bpf_bucket_high(slot - 1, min, shift, max_slots);
+  }
+  return bpf_bucket_high(slot - 1, min, shift, max_slots);
 }
-
 
 static inline u64 bpf_log2(u32 v) {
   u32 shift, r;

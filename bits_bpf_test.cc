@@ -32,7 +32,8 @@ TEST(Log2, ValueToBucket) {
 }
 
 TEST(BpfHistogram, ValueToBucket) {
-  //                               v < min                   => returns max_slots
+  //                               v < min                   => returns
+  //                               max_slots
   // v >= min                   && v < min + 2 ^ shift       => returns 0
   // v >= min + 2 ^ shift       && v < min + 2 ^ (shift + 1) => returns 1
   // v >= min + 2 ^ (shift + 1) && v < min + 2 ^ (shift + 2) => returns 2
@@ -120,7 +121,7 @@ TEST(BpfHistogram, BucketToValue) {
 
   ASSERT_EQ(bpf_bucket_low(0, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 10);
   ASSERT_EQ(bpf_bucket_high(0, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 14);
-  
+
   ASSERT_EQ(bpf_bucket_low(1, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 14);
   ASSERT_EQ(bpf_bucket_high(1, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 18);
 

@@ -114,7 +114,8 @@ int handle_nvme_complete_rq(struct trace_event_raw_nvme_complete_rq* ctx) {
   __sync_fetch_and_add(&hist->total_count, 1);
   __sync_fetch_and_add(&hist->total_sum, delta_us);
 
-  int slot = bpf_get_bucket(delta_us, latency_min, latency_shift, LATENCY_MAX_SLOTS);
+  int slot =
+      bpf_get_bucket(delta_us, latency_min, latency_shift, LATENCY_MAX_SLOTS);
   if (slot >= 0) {
     __sync_fetch_and_add(&hist->slots[slot], 1);
   }

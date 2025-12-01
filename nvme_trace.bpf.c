@@ -54,17 +54,17 @@ int handle_nvme_setup_cmd(struct trace_event_raw_nvme_setup_cmd* ctx) {
   if (!e) return 0;
 
   e->action = kActionTypeSubmit;
-	e->ctrl_id = ctx->ctrl_id;
-	e->qid = ctx->qid;
-	e->opcode = ctx->opcode;
-	e->flags = ctx->flags;
-	e->cid = ctx->cid;
-	e->nsid = ctx->nsid;
-	e->metadata = ctx->metadata;
-	e->fctype = ctx->fctype;
-	// Copying string doesn't quite work yet.
-	// bpf_probe_read_str(e->disk, sizeof(e->disk), ctx->disk);
-	// bpf_probe_read(e->cdw10, sizeof(ctx->cdw10), ctx->cdw10);
+  e->ctrl_id = ctx->ctrl_id;
+  e->qid = ctx->qid;
+  e->opcode = ctx->opcode;
+  e->flags = ctx->flags;
+  e->cid = ctx->cid;
+  e->nsid = ctx->nsid;
+  e->metadata = ctx->metadata;
+  e->fctype = ctx->fctype;
+  // Copying string doesn't quite work yet.
+  // bpf_probe_read_str(e->disk, sizeof(e->disk), ctx->disk);
+  // bpf_probe_read(e->cdw10, sizeof(ctx->cdw10), ctx->cdw10);
 
   bpf_ringbuf_submit(e, 0);
   return 0;
@@ -104,14 +104,14 @@ int handle_nvme_complete_rq(struct trace_event_raw_nvme_complete_rq* ctx) {
   if (!e) return 0;
 
   e->action = kActionTypeComplete;
-	// bpf_probe_read_str(e->disk, sizeof(e->disk), ctx->disk);
-	e->ctrl_id = ctx->ctrl_id;
-	e->qid = ctx->qid;
+  // bpf_probe_read_str(e->disk, sizeof(e->disk), ctx->disk);
+  e->ctrl_id = ctx->ctrl_id;
+  e->qid = ctx->qid;
   e->cid = ctx->cid;
-	e->result = ctx->result;
-	e->retries = ctx->retries;
-	e->flags = ctx->flags;
-	e->status = ctx->status;
+  e->result = ctx->result;
+  e->retries = ctx->retries;
+  e->flags = ctx->flags;
+  e->status = ctx->status;
 
   bpf_ringbuf_submit(e, 0);
   return 0;
