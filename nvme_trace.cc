@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/cleanup/cleanup.h"
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/log/flags.h"
@@ -61,20 +62,22 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char* format,
 }
 
 int HandleNvmeSubmitEvent(const nvme_submit_trace_event& se) {
-  std::cout << "Submit nvme" << std::dec << se.ctrl_id << ": qid=" << se.qid
-            << ", cid=" << se.cid << ", nsid=" << se.nsid << ", flags=0x"
-            << std::hex << static_cast<int>(se.flags) << ", meta=0x" << std::hex
-            << static_cast<int>(se.metadata) << ", opcode=" << std::dec
-            << static_cast<int>(se.opcode) << std::endl;
+  std::cout << std::dec << se.ts_ns << " Submit nvme" << std::dec << se.ctrl_id
+            << ": qid=" << se.qid << ", cid=" << se.cid << ", nsid=" << se.nsid
+            << ", flags=0x" << std::hex << static_cast<int>(se.flags)
+            << ", meta=0x" << std::hex << static_cast<int>(se.metadata)
+            << ", opcode=" << std::dec << static_cast<int>(se.opcode)
+            << std::endl;
   return 0;
 }
 
 int HandleNvmeCompleteEvent(const nvme_complete_trace_event& ce) {
-  std::cout << "Complete nvme" << std::dec << ce.ctrl_id << ": qid=" << ce.qid
-            << ", cid=" << ce.cid << ", res=0x" << std::hex << ce.result
-            << ", retries=" << std::dec << static_cast<int>(ce.retries)
-            << ", flags=0x" << std::hex << static_cast<int>(ce.flags)
-            << ", status=0x" << std::hex << ce.status << std::endl;
+  std::cout << std::dec << ce.ts_ns << " Complete nvme" << std::dec
+            << ce.ctrl_id << ": qid=" << ce.qid << ", cid=" << ce.cid
+            << ", res=0x" << std::hex << ce.result << ", retries=" << std::dec
+            << static_cast<int>(ce.retries) << ", flags=0x" << std::hex
+            << static_cast<int>(ce.flags) << ", status=0x" << std::hex
+            << ce.status << std::endl;
   return 0;
 }
 
@@ -106,10 +109,7 @@ int HandleNvmeEvent(void* ctx, void* data, size_t data_sz) {
   return 0;
 }
 
-int main(int argc, char** argv) {
-  absl::ParseCommandLine(argc, argv);
-  absl::InitializeLog();
-
+absl::Status RunMain() {
   struct ring_buffer* nvme_trace_events = NULL;
   struct nvme_trace_bpf* skel;
   int err;
@@ -119,34 +119,36 @@ int main(int argc, char** argv) {
   signal(SIGINT, sig_handler);
   signal(SIGTERM, sig_handler);
 
-  skel = nvme_trace_bpf__open();
+  skel = nvme_trace_bpf::open();
   if (skel == nullptr) {
-    LOG(ERROR) << "Failed to open and load BPF skeleton" << std::endl;
-    return EXIT_FAILURE;
+    return absl::InternalError("Failed to open and load BPF skeleton");
+  }
+  auto skel_destroy_cleanup =
+      absl::MakeCleanup([skel]() { nvme_trace_bpf::destroy(skel); });
+
+  err = nvme_trace_bpf::load(skel);
+  if (err) {
+    return absl::InternalError(
+        absl::StrCat("Failed to load and verify BPF skeleton, err=", err));
   }
 
-  err = nvme_trace_bpf__load(skel);
+  err = nvme_trace_bpf::attach(skel);
   if (err) {
-    LOG(ERROR) << "Failed to load and verify BPF skeleton, err=" << err
-               << std::endl;
-    goto cleanup;
+    return absl::InternalError(
+        absl::StrCat("Failed to attach BPF skeleton, err=", err));
   }
-
-  err = nvme_trace_bpf__attach(skel);
-  if (err) {
-    LOG(ERROR) << "Failed to attach BPF skeleton, err=" << err << std::endl;
-    goto cleanup;
-  }
+  auto skel_detach_cleanup =
+      absl::MakeCleanup([skel]() { nvme_trace_bpf::detach(skel); });
 
   /* Set up ring buffer polling */
   nvme_trace_events =
       ring_buffer__new(bpf_map__fd(skel->maps.nvme_trace_events),
                        HandleNvmeEvent, /*ctx=*/nullptr, /*opts=*/nullptr);
   if (!nvme_trace_events) {
-    err = -1;
-    fprintf(stderr, "Failed to create ring buffer\n");
-    goto cleanup;
+    return absl::InternalError("Failed to create ring buffer");
   }
+  auto ringbuf_free_cleanup = absl::MakeCleanup(
+      [&nvme_trace_events]() { ring_buffer__free(nvme_trace_events); });
 
   std::cout << "Successfully started!" << std::endl;
 
@@ -163,8 +165,17 @@ int main(int argc, char** argv) {
     }
   }
 
-cleanup:
-  ring_buffer__free(nvme_trace_events);
-  nvme_trace_bpf__destroy(skel);
-  return err < 0 ? -err : EXIT_SUCCESS;
+  return absl::OkStatus();
+}
+
+int main(int argc, char** argv) {
+  absl::ParseCommandLine(argc, argv);
+  absl::InitializeLog();
+
+  absl::Status status = RunMain();
+  if (!status.ok()) {
+    LOG(ERROR) << "Error: " << status;
+    return EXIT_FAILURE;
+  }
+  return EXIT_SUCCESS;
 }

@@ -11,6 +11,8 @@ enum ActionType {
 
 struct nvme_submit_trace_event {
   enum ActionType action;
+  // Timestamp in nanoseconds
+  u64 ts_ns;
   char disk[32];
   int ctrl_id;
   int qid;
@@ -24,6 +26,8 @@ struct nvme_submit_trace_event {
 };
 struct nvme_complete_trace_event {
   enum ActionType action;
+  // Timestamp in nanoseconds
+  u64 ts_ns;
   char disk[32];
   int ctrl_id;
   int qid;
