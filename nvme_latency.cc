@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/cleanup/cleanup.h"
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/log/flags.h"
@@ -203,6 +204,8 @@ int main(int argc, char** argv) {
     LOG(ERROR) << "Failed to open and load BPF skeleton" << std::endl;
     return EXIT_FAILURE;
   }
+  auto skel_destroy_cleanup =
+      absl::MakeCleanup([&skel]() { nvme_latency_bpf__destroy(skel); });
 
   auto filter_ctrl_id = absl::GetFlag(FLAGS_ctrl_id);
   if (filter_ctrl_id >= 0) {
@@ -224,23 +227,29 @@ int main(int argc, char** argv) {
   if (err) {
     LOG(ERROR) << "Failed to load and verify BPF skeleton, err=" << err
                << std::endl;
-    goto cleanup;
+    return EXIT_FAILURE;
   }
 
   err = nvme_latency_bpf__attach(skel);
   if (err) {
     LOG(ERROR) << "Failed to attach BPF skeleton, err=" << err << std::endl;
-    goto cleanup;
+    return EXIT_FAILURE;
   }
+  auto skel_detach_cleanup =
+      absl::MakeCleanup([&skel]() { nvme_latency_bpf__detach(skel); });
 
   std::cout << "Successfully started!" << std::endl;
 
+  absl::Time next_print = absl::Now() + absl::Seconds(1);
   while (!exiting) {
-    absl::SleepFor(absl::Seconds(1));
-    PrintAllHists(skel).IgnoreError();
+    auto now = absl::Now();
+    if (now > next_print) {
+      std::cout << "=====================" << std::endl;
+      PrintAllHists(skel).IgnoreError();
+      next_print = now + absl::Seconds(1);
+    }
+    absl::SleepFor(absl::Milliseconds(50));
   }
 
-cleanup:
-  nvme_latency_bpf__destroy(skel);
   return err < 0 ? -err : EXIT_SUCCESS;
 }

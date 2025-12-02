@@ -85,7 +85,8 @@
             "typeinfo": "cpp",
             "valarray": "cpp",
             "variant": "cpp",
-            "text_encoding": "cpp"
+            "text_encoding": "cpp",
+            "*.inc": "cpp"
         }
     }
 }
