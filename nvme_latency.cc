@@ -199,7 +199,7 @@ int main(int argc, char** argv) {
   signal(SIGINT, sig_handler);
   signal(SIGTERM, sig_handler);
 
-  skel = nvme_latency_bpf__open();
+  skel = nvme_latency_bpf::open();
   if (skel == nullptr) {
     LOG(ERROR) << "Failed to open and load BPF skeleton" << std::endl;
     return EXIT_FAILURE;
