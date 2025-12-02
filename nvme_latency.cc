@@ -33,7 +33,7 @@
 bazel build :nvme_latency && sudo bazel-bin/nvme_latency
 
 bazel build :nvme_latency && sudo bazel-bin/nvme_latency \
-  --ctrl_id=0 --split_size
+  --ctrl_id=0 --split_size --lat_min_us=65
 */
 
 ABSL_DECLARE_FLAG(int, stderrthreshold);

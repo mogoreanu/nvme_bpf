@@ -6,20 +6,8 @@ Tools to debug and monitor linux NVMe activity using BPF / eBPF tracepoints / kp
 You will need `clang` (at least v11 or later), `libelf` and `zlib` to build
 the examples, package names may vary across distros.
 
-You will need `bpftool` during the build process to generate the BPF skeleton 
-files and core dependencies.
-
-TODO(mogo): It would be nice to add bpftool to submodules and build it from 
-scratch.
-
 ```shell
 apt install clang libelf1 libelf-dev zlib1g-dev
-apt install bpftool
-```
-
-You may have to make bpftool available for non-root users
-```shell
-cp /usr/sbin/bpftool /usr/bin/
 ```
 
 ## Getting the source code
@@ -160,19 +148,21 @@ struct trace_event_raw_nvme_complete_rq {
 
 ## More notes
 
-To re-generate the `nvme_core.h` file use `bpftool`
+The `nvme_core_gen.h` is generated using `bpftool`
 
 ```shell
-bpftool btf dump file /sys/kernel/btf/nvme_core format c > nvme_core.h
+# Using installed bpftool
+bpftool btf dump file /sys/kernel/btf/nvme_core format c
+# Using built bpftool
+bazel run :bpftool -- btf dump file /sys/kernel/btf/nvme_core format c
 ```
 
 To re-generate the `vmlinux.h` file use `bpftool`
 
 ```shell
-bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
+bpftool btf dump file /sys/kernel/btf/vmlinux format c
+bazel run :bpftool -- btf dump file /sys/kernel/btf/vmlinux format c
 ```
-
-
 
 # Relevant projects
 

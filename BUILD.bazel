@@ -93,7 +93,8 @@ genrule(
     name = "nvme_core_gen_h",
     srcs = [],
     outs = ["nvme_core_gen.h"],
-    cmd = "bpftool btf dump file /sys/kernel/btf/nvme_core format c > $@",
+    tools = [":bpftool"],
+    cmd = "$(location :bpftool) btf dump file /sys/kernel/btf/nvme_core format c > $@",
 )
 
 bpf_program(

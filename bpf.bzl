@@ -43,6 +43,7 @@ def bpf_skel(name, bpf_object, skel_header, **kwargs):
         name = name,
         srcs = [bpf_object],
         outs = [skel_header],
-        cmd = "bpftool gen skeleton $(location %s) > $@" % bpf_object,
+        tools = ["//:bpftool"],
+        cmd = "$(location //:bpftool) gen skeleton $(location %s) > $@" % bpf_object,
         **kwargs
     )
