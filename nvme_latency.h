@@ -14,11 +14,13 @@ struct request_key {
 struct request_data {
   u64 start_ns;
   u8 opcode;
+	u8 size_class;
 };
 
 struct latency_hist_key {
   u32 ctrl_id;
   u8 opcode;
+	u8 size_class;
 };
 
 // The mapping from raw value to slot and the other way around is done using the

@@ -31,7 +31,9 @@
 
 /*
 bazel build :nvme_latency && sudo bazel-bin/nvme_latency
-bazel build :nvme_latency && sudo bazel-bin/nvme_latency --stderrthreshold=0
+
+bazel build :nvme_latency && sudo bazel-bin/nvme_latency \
+  --ctrl_id=0 --split_size
 */
 
 ABSL_DECLARE_FLAG(int, stderrthreshold);
@@ -42,6 +44,8 @@ ABSL_FLAG(int, nsid, -1, "");
 
 ABSL_FLAG(int, lat_min_us, -1, "");
 ABSL_FLAG(int, lat_shift, -1, "");
+
+ABSL_FLAG(bool, split_size, false, "");
 
 static volatile bool exiting = false;
 static void sig_handler(int sig) { exiting = true; }
@@ -135,8 +139,17 @@ absl::Status PrintAllHists(struct nvme_latency_bpf* skel) {
     std::cout << "key: ctrl_id=" << next_key.ctrl_id
               << ", opcode=" << static_cast<int>(next_key.opcode) << " "
               << nvme_abi::NvmeIoOpcodeToString(
-                     static_cast<nvme_abi::NvmeOpcode>(next_key.opcode))
-              << std::endl;
+                     static_cast<nvme_abi::NvmeOpcode>(next_key.opcode));
+    if (absl::GetFlag(FLAGS_split_size)) {
+      if (next_key.size_class == 0) {
+        std::cout << ", <=16KiB";
+      } else if (next_key.size_class == 1) {
+        std::cout << ", (16KiB, 64KiB]";
+      } else {
+        std::cout << ", (64KiB, inf)";
+      }
+    }
+    std::cout << std::endl;
     int err = bpf_map_lookup_elem(fd, &next_key, &hist);
     if (err < 0) {
       std::cerr << "Histogram not found for key." << std::endl;
@@ -230,6 +243,12 @@ absl::Status RunMain() {
   auto flag_nsid = absl::GetFlag(FLAGS_nsid);
   if (flag_nsid >= 0) {
     skel->rodata->filter_nsid = flag_nsid;
+  }
+
+  auto flag_split_size = absl::GetFlag(FLAGS_split_size);
+  if (flag_split_size) {
+    skel->rodata->class1_size_nlb = 4;   // 16 KiB
+    skel->rodata->class2_size_nlb = 16;  // 64 KiB
   }
 
   err = nvme_latency_bpf::load(skel);

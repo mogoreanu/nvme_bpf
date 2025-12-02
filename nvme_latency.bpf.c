@@ -24,6 +24,11 @@ const volatile __u8 filter_opcode = ALL_OPCODE;
 const volatile __u64 latency_min = 0;
 const volatile __u64 latency_shift = 0;
 
+#define SIZE_CLASS_DISABLED 0xFFFF
+
+const volatile int class1_size_nlb = SIZE_CLASS_DISABLED;
+const volatile int class2_size_nlb = SIZE_CLASS_DISABLED;
+
 struct {
   __uint(type, BPF_MAP_TYPE_HASH);
   __uint(max_entries, 10240);
@@ -73,6 +78,28 @@ int handle_nvme_setup_cmd(struct trace_event_raw_nvme_setup_cmd* ctx) {
   req_data.start_ns = ts;
   req_data.opcode = ctx->opcode;
 
+  if (class1_size_nlb == SIZE_CLASS_DISABLED) {
+    req_data.size_class = 0;
+  } else {
+    // sqe.cdw12 contains the zero-based size in blocks in lsb format.
+    u32 nlb = ctx->cdw10[11];
+    nlb <<= 8;
+    nlb |= ctx->cdw10[10];
+    nlb <<= 8;
+    nlb |= ctx->cdw10[9];
+    nlb <<= 8;
+    nlb |= ctx->cdw10[8];
+    nlb += 1;  // Convert from zero-based to one-based.
+
+    if (nlb <= class1_size_nlb) {
+      req_data.size_class = 0;
+    } else if (nlb <= class2_size_nlb) {
+      req_data.size_class = 1;
+    } else {
+      req_data.size_class = 2;
+    }
+  }
+
   long ret = bpf_map_update_elem(&in_flight, &req_key, &req_data, BPF_ANY);
   if (ret != 0) {
     // TODO(mogo): Record lost starts.
@@ -110,6 +137,7 @@ int handle_nvme_complete_rq(struct trace_event_raw_nvme_complete_rq* ctx) {
   struct latency_hist_key hist_key = {};
   hist_key.ctrl_id = ctx->ctrl_id;
   hist_key.opcode = req_data->opcode;
+  hist_key.size_class = req_data->size_class;
 
   struct latency_hist* hist;
   hist = bpf_map_lookup_elem(&hists, &hist_key);
