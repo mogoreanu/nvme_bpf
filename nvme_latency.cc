@@ -148,6 +148,10 @@ absl::Status PrintAllHists(struct nvme_latency_bpf* skel) {
       } else {
         std::cout << ", (64KiB, inf)";
       }
+    } else {
+      LOG_IF_EVERY_N_SEC(ERROR, next_key.size_class != 0, 1)
+          << "Unexpected size_class " << static_cast<int>(next_key.size_class)
+          << " when --split_size is not set.";
     }
     std::cout << std::endl;
     int err = bpf_map_lookup_elem(fd, &next_key, &hist);
