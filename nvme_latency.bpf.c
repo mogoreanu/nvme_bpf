@@ -14,9 +14,11 @@ char LICENSE[] SEC("license") = "MIT";
 
 #define MAX_LATENCY_ENTRIES 20
 #define ALL_CTRL_ID 0xFFFFFFFF
+#define ALL_NSID 0xFFFFFFFF
 #define ALL_OPCODE 0xFF
 
 const volatile __u32 filter_ctrl_id = ALL_CTRL_ID;
+const volatile __u32 filter_nsid = ALL_NSID;
 const volatile __u8 filter_opcode = ALL_OPCODE;
 const volatile __u64 latency_min = 0;
 const volatile __u64 latency_shift = 0;
@@ -50,6 +52,9 @@ int handle_nvme_setup_cmd(struct trace_event_raw_nvme_setup_cmd* ctx) {
   if (filter_opcode != ALL_OPCODE && ctx->opcode != (u8)filter_opcode) {
     return 0;
   }
+  if (filter_nsid != ALL_NSID && ctx->nsid != filter_nsid) {
+    return 0;
+  }
 
   u64 ts = bpf_ktime_get_ns();
   // Important to initialize the key, outherwise garbage padding (probably) may
@@ -69,6 +74,9 @@ int handle_nvme_setup_cmd(struct trace_event_raw_nvme_setup_cmd* ctx) {
   }
   return 0;
 }
+
+// TODO(mogo): Periodic cleanup of in_flight requests that exceed unreasonable
+// duration.
 
 SEC("tp/nvme/nvme_complete_rq")
 int handle_nvme_complete_rq(struct trace_event_raw_nvme_complete_rq* ctx) {

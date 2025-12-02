@@ -36,6 +36,7 @@ ABSL_DECLARE_FLAG(int, stderrthreshold);
 
 ABSL_FLAG(int, ctrl_id, -1,
           "NVMe controller ID to filter on, -1 for all controllers");
+ABSL_FLAG(int, nsid, -1, "");
 
 ABSL_FLAG(int, lat_min_us, -1, "");
 ABSL_FLAG(int, lat_shift, -1, "");
@@ -53,6 +54,16 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char* format,
 
 int global_lat_min_us = 0;
 int global_lat_shift = 0;
+
+u64 my_bpf_bucket_low(int slot) {
+  return bpf_bucket_low(slot, global_lat_min_us, global_lat_shift,
+                        LATENCY_MAX_SLOTS);
+}
+
+u64 my_bpf_bucket_high(int slot) {
+  return bpf_bucket_high(slot, global_lat_min_us, global_lat_shift,
+                         LATENCY_MAX_SLOTS);
+}
 
 absl::Status PrintHist(const struct latency_hist& hist) {
   int first_nonzero_slot = 0;
@@ -73,24 +84,16 @@ absl::Status PrintHist(const struct latency_hist& hist) {
   uint64_t computed_total_count = 0;
 
   if (hist.slots[LATENCY_MAX_SLOTS] != 0) {
-    std::cout << "  ["
-              << bpf_bucket_low(LATENCY_MAX_SLOTS, global_lat_min_us,
-                                global_lat_shift, LATENCY_MAX_SLOTS)
-              << "us - "
-              << bpf_bucket_high(LATENCY_MAX_SLOTS, global_lat_min_us,
-                                 global_lat_shift, LATENCY_MAX_SLOTS)
+    std::cout << "  [" << my_bpf_bucket_low(LATENCY_MAX_SLOTS) << "us - "
+              << my_bpf_bucket_high(LATENCY_MAX_SLOTS)
               << "us): " << hist.slots[LATENCY_MAX_SLOTS] << std::endl;
     computed_total_count += hist.slots[LATENCY_MAX_SLOTS];
   }
 
   for (int slot = first_nonzero_slot; slot <= last_nonzero_slot; ++slot) {
-    std::cout << "  ["
-              << bpf_bucket_low(slot, global_lat_min_us, global_lat_shift,
-                                LATENCY_MAX_SLOTS)
-              << "us - "
-              << bpf_bucket_high(slot, global_lat_min_us, global_lat_shift,
-                                 LATENCY_MAX_SLOTS)
-              << "us): " << hist.slots[slot] << std::endl;
+    std::cout << "  [" << my_bpf_bucket_low(slot) << "us - "
+              << my_bpf_bucket_high(slot) << "us): " << hist.slots[slot]
+              << std::endl;
     computed_total_count += hist.slots[slot];
   }
   if (computed_total_count != hist.total_count) {
@@ -187,10 +190,7 @@ absl::Status PrintAllInFlight(struct nvme_latency_bpf* skel) {
   return absl::OkStatus();
 }
 
-int main(int argc, char** argv) {
-  absl::ParseCommandLine(argc, argv);
-  absl::InitializeLog();
-
+absl::Status RunMain() {
   struct nvme_latency_bpf* skel;
   int err;
 
@@ -201,8 +201,7 @@ int main(int argc, char** argv) {
 
   skel = nvme_latency_bpf::open();
   if (skel == nullptr) {
-    LOG(ERROR) << "Failed to open and load BPF skeleton" << std::endl;
-    return EXIT_FAILURE;
+    return absl::InternalError("Failed to open and load BPF skeleton");
   }
   auto skel_destroy_cleanup =
       absl::MakeCleanup([&skel]() { nvme_latency_bpf::destroy(skel); });
@@ -223,17 +222,21 @@ int main(int argc, char** argv) {
   }
   global_lat_shift = skel->rodata->latency_shift;
 
+  auto flag_nsid = absl::GetFlag(FLAGS_nsid);
+  if (flag_nsid >= 0) {
+    skel->rodata->filter_nsid = flag_nsid;
+  }
+
   err = nvme_latency_bpf::load(skel);
   if (err) {
-    LOG(ERROR) << "Failed to load and verify BPF skeleton, err=" << err
-               << std::endl;
-    return EXIT_FAILURE;
+    return absl::InternalError(
+        absl::StrCat("Failed to load and verify BPF skeleton, err=", err));
   }
 
   err = nvme_latency_bpf::attach(skel);
   if (err) {
-    LOG(ERROR) << "Failed to attach BPF skeleton, err=" << err << std::endl;
-    return EXIT_FAILURE;
+    return absl::InternalError(
+        absl::StrCat("Failed to attach BPF skeleton, err=", err));
   }
   auto skel_detach_cleanup =
       absl::MakeCleanup([&skel]() { nvme_latency_bpf::detach(skel); });
@@ -251,5 +254,18 @@ int main(int argc, char** argv) {
     absl::SleepFor(absl::Milliseconds(50));
   }
 
-  return err < 0 ? -err : EXIT_SUCCESS;
+  return absl::OkStatus();
+}
+
+int main(int argc, char** argv) {
+  absl::ParseCommandLine(argc, argv);
+  absl::InitializeLog();
+
+  absl::Status main_status = RunMain();
+  if (!main_status.ok()) {
+    std::cerr << main_status;
+    return EXIT_FAILURE;
+  }
+
+  return EXIT_SUCCESS;
 }

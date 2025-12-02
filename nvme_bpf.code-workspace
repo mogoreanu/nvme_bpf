@@ -1,8 +1,11 @@
 {
 	"folders": [
-		{
-			"path": "."
-		}
+        {
+            "path": "."
+        },
+        {
+            "path": "bazel-nvme_bpf/external/abseil-cpp+"
+        }
     ],
     "settings": {
         "editor.renderWhitespace": "boundary",
