@@ -11,6 +11,9 @@ typedef _Bool bool;
 
 char LICENSE[] SEC("license") = "MIT";
 
+#define ALL_CTRL_ID 0xFFFFFFFF
+const volatile __u32 filter_ctrl_id = ALL_CTRL_ID;
+
 struct {
   __uint(type, BPF_MAP_TYPE_RINGBUF);
   __uint(max_entries, 256 * 1024);
@@ -21,6 +24,9 @@ int handle_nvme_setup_cmd(struct trace_event_raw_nvme_setup_cmd* ctx) {
   // bpf_printk("nvme_setup_cmd: PID %d, qid=%d, cid=%d, opcode=0x%x\n",
   //            bpf_get_current_pid_tgid() >> 32, ctx->qid, ctx->cid,
   //            ctx->opcode);
+  if (filter_ctrl_id != ALL_CTRL_ID && ctx->ctrl_id != (int)filter_ctrl_id) {
+    return 0;
+  }
   struct nvme_submit_trace_event* e;
   e = bpf_ringbuf_reserve(&nvme_trace_events, sizeof(*e), 0);
   if (!e) return 0;
@@ -48,6 +54,9 @@ int handle_nvme_complete_rq(struct trace_event_raw_nvme_complete_rq* ctx) {
   // bpf_printk("nvme_complete_rq: PID %d, disk=%s, qid=%d, cid=%d\n",
   //            bpf_get_current_pid_tgid() >> 32, ctx->disk, ctx->qid,
   //            ctx->cid);
+  if (filter_ctrl_id != ALL_CTRL_ID && ctx->ctrl_id != (int)filter_ctrl_id) {
+    return 0;
+  }
   struct nvme_complete_trace_event* e;
   e = bpf_ringbuf_reserve(&nvme_trace_events, sizeof(*e), 0);
   if (!e) return 0;

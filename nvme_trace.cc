@@ -30,6 +30,8 @@ bazel build :nvme_trace && sudo bazel-bin/nvme_trace
 */
 
 ABSL_DECLARE_FLAG(int, stderrthreshold);
+ABSL_FLAG(int, ctrl_id, -1,
+          "NVMe controller ID to filter on, -1 for all controllers");
 
 static volatile bool exiting = false;
 static void sig_handler(int sig) { exiting = true; }
@@ -125,6 +127,11 @@ absl::Status RunMain() {
   }
   auto skel_destroy_cleanup =
       absl::MakeCleanup([skel]() { nvme_trace_bpf::destroy(skel); });
+
+  auto filter_ctrl_id = absl::GetFlag(FLAGS_ctrl_id);
+  if (filter_ctrl_id >= 0) {
+    skel->rodata->filter_ctrl_id = filter_ctrl_id;
+  }
 
   err = nvme_trace_bpf::load(skel);
   if (err) {
