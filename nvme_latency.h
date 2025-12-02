@@ -21,6 +21,8 @@ struct latency_hist_key {
   u8 opcode;
 };
 
+// The mapping from raw value to slot and the other way around is done using the
+// `bits.bpf.h` helper functions: bpf_get_bucket and bpf_bucket_{low,high}.
 struct latency_hist {
   u64 slots[LATENCY_MAX_SLOTS + 1];
   u64 total_sum;

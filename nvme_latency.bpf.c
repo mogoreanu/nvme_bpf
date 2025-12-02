@@ -17,6 +17,7 @@ char LICENSE[] SEC("license") = "MIT";
 #define ALL_NSID 0xFFFFFFFF
 #define ALL_OPCODE 0xFF
 
+// Variables set from the userspace program.
 const volatile __u32 filter_ctrl_id = ALL_CTRL_ID;
 const volatile __u32 filter_nsid = ALL_NSID;
 const volatile __u8 filter_opcode = ALL_OPCODE;
@@ -53,6 +54,10 @@ int handle_nvme_setup_cmd(struct trace_event_raw_nvme_setup_cmd* ctx) {
     return 0;
   }
   if (filter_nsid != ALL_NSID && ctx->nsid != filter_nsid) {
+    return 0;
+  }
+  if (ctx->qid == 0) {
+    // Skip measuring the latency of the admin commands
     return 0;
   }
 
