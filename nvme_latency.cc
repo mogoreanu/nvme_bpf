@@ -205,7 +205,7 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   auto skel_destroy_cleanup =
-      absl::MakeCleanup([&skel]() { nvme_latency_bpf__destroy(skel); });
+      absl::MakeCleanup([&skel]() { nvme_latency_bpf::destroy(skel); });
 
   auto filter_ctrl_id = absl::GetFlag(FLAGS_ctrl_id);
   if (filter_ctrl_id >= 0) {
@@ -223,20 +223,20 @@ int main(int argc, char** argv) {
   }
   global_lat_shift = skel->rodata->latency_shift;
 
-  err = nvme_latency_bpf__load(skel);
+  err = nvme_latency_bpf::load(skel);
   if (err) {
     LOG(ERROR) << "Failed to load and verify BPF skeleton, err=" << err
                << std::endl;
     return EXIT_FAILURE;
   }
 
-  err = nvme_latency_bpf__attach(skel);
+  err = nvme_latency_bpf::attach(skel);
   if (err) {
     LOG(ERROR) << "Failed to attach BPF skeleton, err=" << err << std::endl;
     return EXIT_FAILURE;
   }
   auto skel_detach_cleanup =
-      absl::MakeCleanup([&skel]() { nvme_latency_bpf__detach(skel); });
+      absl::MakeCleanup([&skel]() { nvme_latency_bpf::detach(skel); });
 
   std::cout << "Successfully started!" << std::endl;
 
