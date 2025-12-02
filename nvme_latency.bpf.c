@@ -1,5 +1,5 @@
 // clang-format off
-#include "nvme_core.h"
+#include "nvme_core_gen.h"
 // clang-format on
 
 #include "nvme_latency.h"

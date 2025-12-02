@@ -1,7 +1,7 @@
 // vmlinux overlaps with nvme_core which we need for nvme trace data structures
 // #include "vmlinux.h"
 // clang-format off
-#include "nvme_core.h"
+#include "nvme_core_gen.h"
 typedef _Bool bool;
 // clang-format on
 #include "nvme_trace.h"

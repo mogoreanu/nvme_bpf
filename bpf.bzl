@@ -31,6 +31,7 @@ def bpf_program(name, src, bpf_object, hdrs = [], **kwargs):
                 -D__TARGET_ARCH_x86 \
                 -I . \
                 -I $$(pwd) \
+                -I $(GENDIR) \
                 -c $(location %s) \
                 -o $@
         """ % src,

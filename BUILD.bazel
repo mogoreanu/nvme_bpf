@@ -85,7 +85,7 @@ bpf_program(
     name = "nvme_trace_bpf_o",
     src = "nvme_trace.bpf.c",
     hdrs = [
-        "nvme_core.h",
+        "nvme_core_gen.h",
         "nvme_trace.h",
         "types.bpf.h",
     ],
@@ -129,7 +129,7 @@ bpf_program(
     src = "nvme_latency.bpf.c",
     hdrs = [
         "bits.bpf.h",
-        "nvme_core.h",
+        "nvme_core_gen.h",
         "nvme_latency.h",
         "types.bpf.h",
     ],
