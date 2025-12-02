@@ -74,6 +74,21 @@ cc_library(
     deps = [":libbpf_uapi_headers"],
 )
 
+cc_library(
+    name = "nvme_abi",
+    srcs = [],
+    hdrs = ["nvme_abi.h"],
+    cxxopts = ["-std=c++20"],
+)
+
+cc_library(
+    name = "nvme_strings",
+    srcs = ["nvme_strings.cc"],
+    hdrs = ["nvme_strings.h"],
+    cxxopts = ["-std=c++20"],
+    deps = [":nvme_abi"],
+)
+
 genrule(
     name = "nvme_core_gen_h",
     srcs = [],
@@ -151,6 +166,7 @@ cc_binary(
         "types.bpf.h",
         ":nvme_latency_skel_h",
     ],
+    cxxopts = ["-std=c++20"],
     # Link against system libraries required by libbpf (elf, zlib)
     linkopts = [
         "-lelf",
@@ -158,6 +174,8 @@ cc_binary(
     ],
     deps = [
         ":libbpf",
+        ":nvme_abi",
+        ":nvme_strings",
         "@abseil-cpp//absl/cleanup",
         "@abseil-cpp//absl/flags:flag",
         "@abseil-cpp//absl/flags:parse",

@@ -26,6 +26,8 @@
 #include "absl/time/time.h"
 #include "bits.bpf.h"
 #include "nvme_latency.skel.h"
+#include "nvme_abi.h"
+#include "nvme_strings.h"
 
 /*
 bazel build :nvme_latency && sudo bazel-bin/nvme_latency
@@ -131,7 +133,8 @@ absl::Status PrintAllHists(struct nvme_latency_bpf* skel) {
 
   while (0 == bpf_map_get_next_key(fd, &lookup_key, &next_key)) {
     std::cout << "key: ctrl_id=" << next_key.ctrl_id
-              << ", opcode=" << static_cast<int>(next_key.opcode) << std::endl;
+              << ", opcode=" << static_cast<int>(next_key.opcode) << " " 
+              << nvme_abi::NvmeIoOpcodeToString(static_cast<nvme_abi::NvmeOpcode>(next_key.opcode)) << std::endl;
     int err = bpf_map_lookup_elem(fd, &next_key, &hist);
     if (err < 0) {
       std::cerr << "Histogram not found for key." << std::endl;
