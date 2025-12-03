@@ -74,6 +74,42 @@ cc_library(
     deps = [":libbpf_uapi_headers"],
 )
 
+cc_binary(
+    name = "bpftool",
+    srcs = glob(
+        [
+            "bpftool/src/*.c",
+            "bpftool/src/**/*.h",
+            "bpftool/include/**/*.h",
+        ],
+        exclude = ["bpftool/src/jit_disasm.c"],
+    ) + [
+        "bpftool/src/kernel/bpf/disasm.c",
+    ],
+    copts = [
+        "-O2",
+        "-W",
+        "-Wall",
+        "-Wextra",
+        "-Wno-unused-parameter",
+        "-Wno-missing-field-initializers",
+        "-Wno-format-truncation",
+        "-DPACKAGE='\"bpftool\"'",
+        "-D__EXPORTED_HEADERS__",
+        "-DBPFTOOL_WITHOUT_SKELETONS",
+        "-D_LARGEFILE64_SOURCE",
+        "-D_FILE_OFFSET_BITS=64",
+    ],
+    includes = [
+        "bpftool/include",
+        "bpftool/include/uapi",
+        "bpftool/src",
+        "bpftool/src/kernel/bpf",
+    ],
+    linkopts = ["-lcrypto"],
+    deps = [":libbpf"],
+)
+
 cc_library(
     name = "nvme_abi",
     srcs = [],
@@ -205,38 +241,3 @@ cc_test(
 )
 
 
-cc_binary(
-    name = "bpftool",
-    srcs = glob(
-        [
-            "bpftool/src/*.c",
-            "bpftool/src/**/*.h",
-            "bpftool/include/**/*.h",
-        ],
-        exclude = ["bpftool/src/jit_disasm.c"],
-    ) + [
-        "bpftool/src/kernel/bpf/disasm.c",
-    ],
-    copts = [
-        "-O2",
-        "-W",
-        "-Wall",
-        "-Wextra",
-        "-Wno-unused-parameter",
-        "-Wno-missing-field-initializers",
-        "-Wno-format-truncation",
-        "-DPACKAGE='\"bpftool\"'",
-        "-D__EXPORTED_HEADERS__",
-        "-DBPFTOOL_WITHOUT_SKELETONS",
-        "-D_LARGEFILE64_SOURCE",
-        "-D_FILE_OFFSET_BITS=64",
-    ],
-    includes = [
-        "bpftool/include",
-        "bpftool/include/uapi",
-        "bpftool/src",
-        "bpftool/src/kernel/bpf",
-    ],
-    linkopts = ["-lcrypto"],
-    deps = [":libbpf"],
-)

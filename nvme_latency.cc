@@ -181,7 +181,7 @@ absl::Status PrintAllHists(struct nvme_latency_bpf* skel) {
           continue;
         }
 
-    struct latency_hist_key lookup_key = {};
+        struct latency_hist_key lookup_key = {};
         lookup_key.ctrl_id = ctrl_id;
         lookup_key.opcode = opcode;
         lookup_key.size_class = size_class;
