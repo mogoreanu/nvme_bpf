@@ -20,31 +20,31 @@ cc_binary(
 # Libbpf build rules
 filegroup(
     name = "libbpf_headers",
-    srcs = glob(["libbpf/src/*.h"]),
+    srcs = glob(["bpftool/libbpf/src/*.h"]),
 )
 
 filegroup(
     name = "libbpf_uapi_headers_files",
-    srcs = glob(["libbpf/include/uapi/**/*.h"]),
+    srcs = glob(["bpftool/libbpf/include/uapi/**/*.h"]),
 )
 
 cc_library(
     name = "libbpf_uapi_headers",
-    hdrs = glob(["libbpf/include/uapi/**/*.h"]),
-    includes = ["libbpf/include/uapi"],
+    hdrs = glob(["bpftool/libbpf/include/uapi/**/*.h"]),
+    includes = ["bpftool/libbpf/include/uapi"],
 )
 
 cc_library(
     name = "libbpf",
     srcs = glob(
         [
-            "libbpf/src/*.c",
-            "libbpf/src/*.h",
-            "libbpf/include/**/*.h",
+            "bpftool/libbpf/src/*.c",
+            "bpftool/libbpf/src/*.h",
+            "bpftool/libbpf/include/**/*.h",
         ],
-        exclude = ["libbpf/src/test_libbpf.c"],
+        exclude = ["bpftool/libbpf/src/test_libbpf.c"],
     ),
-    hdrs = glob(["libbpf/src/*.h"]),
+    hdrs = glob(["bpftool/libbpf/src/*.h"]),
     copts = [
         "-g",
         "-O2",
@@ -62,15 +62,15 @@ cc_library(
     ],
     include_prefix = "bpf",
     includes = [
-        "libbpf/include",
-        "libbpf/include/uapi",
-        "libbpf/src",
+        "bpftool/libbpf/include",
+        "bpftool/libbpf/include/uapi",
+        "bpftool/libbpf/src",
     ],
     linkopts = [
         "-lelf",
         "-lz",
     ],
-    strip_include_prefix = "libbpf/src",
+    strip_include_prefix = "bpftool/libbpf/src",
     deps = [":libbpf_uapi_headers"],
 )
 
