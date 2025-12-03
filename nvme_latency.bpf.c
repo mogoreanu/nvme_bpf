@@ -21,7 +21,7 @@ char LICENSE[] SEC("license") = "MIT";
 const volatile __u32 filter_ctrl_id = ALL_CTRL_ID;
 const volatile __u32 filter_nsid = ALL_NSID;
 const volatile __u8 filter_opcode = ALL_OPCODE;
-const volatile __u64 latency_min = 0;
+const volatile __u64 latency_min = 20;
 const volatile __u64 latency_shift = 0;
 
 #define SIZE_CLASS_DISABLED 0xFFFF

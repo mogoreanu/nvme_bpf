@@ -10,7 +10,9 @@
 #include <unistd.h>
 
 #include <iostream>
+#include <set>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "absl/cleanup/cleanup.h"
@@ -113,6 +115,16 @@ absl::Status PrintHist(const struct latency_hist& hist) {
   return absl::OkStatus();
 }
 
+template <typename T1, typename T2, typename T3>
+struct TupleHash {
+  size_t operator()(const std::tuple<T1, T2, T3>& t) const {
+    // Combine hashes of individual elements
+    return std::hash<T1>()(std::get<0>(t)) ^
+           (std::hash<T2>()(std::get<1>(t)) << 1) ^
+           (std::hash<T3>()(std::get<2>(t)) << 2);
+  }
+};
+
 absl::Status PrintAllHists(struct nvme_latency_bpf* skel) {
   int fd = bpf_map__fd(skel->maps.hists);
   if (fd < 0) {
@@ -123,50 +135,91 @@ absl::Status PrintAllHists(struct nvme_latency_bpf* skel) {
     }
     return absl::InternalError("BPF map fd error");
   }
-  struct latency_hist hist;
 
-  struct latency_hist_key lookup_key;
-  lookup_key.ctrl_id = std::numeric_limits<u32>::max();
-  lookup_key.opcode = 0;
-  struct latency_hist_key next_key;
+  struct latency_hist_key dummy_key;
+  std::set<decltype(dummy_key.ctrl_id)> controllers;
+  std::set<decltype(dummy_key.opcode)> opcodes;
+  std::set<decltype(dummy_key.size_class)> sizes;
+  std::unordered_set<
+      std::tuple<decltype(dummy_key.ctrl_id), decltype(dummy_key.opcode),
+                 decltype(dummy_key.size_class)>,
+      TupleHash<decltype(dummy_key.ctrl_id), decltype(dummy_key.opcode),
+                decltype(dummy_key.size_class)>>
+      keys;
 
-  if (bpf_map_get_next_key(fd, &lookup_key, &next_key) != 0) {
-    std::cout << "No entries in histogram map." << std::endl;
-    return absl::OkStatus();
+  {
+    struct latency_hist_key lookup_key = {};
+    lookup_key.ctrl_id = std::numeric_limits<u32>::max();
+    lookup_key.opcode = 0;
+    struct latency_hist_key next_key;
+
+    if (bpf_map_get_next_key(fd, &lookup_key, &next_key) != 0) {
+      std::cout << "No entries in histogram map." << std::endl;
+      return absl::OkStatus();
+    }
+
+    // Scan the map and find all controllers / opcodes / sizes.
+    while (0 == bpf_map_get_next_key(fd, &lookup_key, &next_key)) {
+      controllers.insert(next_key.ctrl_id);
+      opcodes.insert(next_key.opcode);
+      sizes.insert(next_key.size_class);
+
+      keys.insert(std::make_tuple(next_key.ctrl_id, next_key.opcode,
+                                  next_key.size_class));
+
+      lookup_key = next_key;
+    }
   }
 
-  while (0 == bpf_map_get_next_key(fd, &lookup_key, &next_key)) {
-    std::cout << "key: ctrl_id=" << next_key.ctrl_id
-              << ", opcode=" << static_cast<int>(next_key.opcode) << " "
-              << nvme_abi::NvmeIoOpcodeToString(
-                     static_cast<nvme_abi::NvmeOpcode>(next_key.opcode));
-    if (absl::GetFlag(FLAGS_split_size)) {
-      if (next_key.size_class == 0) {
-        std::cout << ", <=16KiB";
-      } else if (next_key.size_class == 1) {
-        std::cout << ", (16KiB, 64KiB]";
-      } else {
-        std::cout << ", (64KiB, inf)";
+  // Print the histograms in a meaningful order.
+  for (const auto& ctrl_id : controllers) {
+    for (const auto& opcode : opcodes) {
+      for (const auto& size_class : sizes) {
+        if (keys.find(std::make_tuple(ctrl_id, opcode, size_class)) ==
+            keys.end()) {
+          // Short circuit to avoid going through the BPF functions.
+          continue;
+        }
+
+    struct latency_hist_key lookup_key = {};
+        lookup_key.ctrl_id = ctrl_id;
+        lookup_key.opcode = opcode;
+        lookup_key.size_class = size_class;
+
+        struct latency_hist hist;
+        int err = bpf_map_lookup_elem(fd, &lookup_key, &hist);
+        if (err < 0) {
+          // Shouldn't really happen ...
+          continue;
+        }
+
+        std::cout << "key: ctrl_id=" << ctrl_id
+                  << ", opcode=" << static_cast<int>(opcode) << " "
+                  << nvme_abi::NvmeIoOpcodeToString(
+                         static_cast<nvme_abi::NvmeOpcode>(opcode));
+        if (absl::GetFlag(FLAGS_split_size)) {
+          if (size_class == 0) {
+            std::cout << ", <=16KiB";
+          } else if (size_class == 1) {
+            std::cout << ", (16KiB, 64KiB]";
+          } else {
+            std::cout << ", (64KiB, inf)";
+          }
+        } else {
+          LOG_IF_EVERY_N_SEC(ERROR, size_class != 0, 1)
+              << "Unexpected size_class " << static_cast<int>(size_class)
+              << " when --split_size is not set.";
+        }
+        std::cout << std::endl;
+
+        auto ps = PrintHist(hist);
+        if (!ps.ok()) {
+          std::cerr << "Failed to print histogram: " << ps.message()
+                    << std::endl;
+          break;
+        }
       }
-    } else {
-      LOG_IF_EVERY_N_SEC(ERROR, next_key.size_class != 0, 1)
-          << "Unexpected size_class " << static_cast<int>(next_key.size_class)
-          << " when --split_size is not set.";
     }
-    std::cout << std::endl;
-    int err = bpf_map_lookup_elem(fd, &next_key, &hist);
-    if (err < 0) {
-      std::cerr << "Histogram not found for key." << std::endl;
-      break;
-    }
-
-    auto ps = PrintHist(hist);
-    if (!ps.ok()) {
-      std::cerr << "Failed to print histogram: " << ps.message() << std::endl;
-      break;
-    }
-
-    lookup_key = next_key;
   }
   return absl::OkStatus();
 }
