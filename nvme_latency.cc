@@ -33,10 +33,35 @@
 #include "nvme_strings.h"
 
 /*
+Program used to monitor NVMe request latency.
+By monitoring the IO latency at the NVMe driver layer we can isolate problem
+sources between the device and the rest of the storage stack layers.
+
+Useful flags / settings:
+* --ctrl_id=X. Monitor the latency only for the controller X.
+* --lat_min_us=X. Sets the minimum latency to be considered for the histogram
+  buckets. This allows to have more granularity around the specified value.
+* --split_size. If set the histograms are split by size classes:
+  <=16KiB, (16KiB,64KiB], >64KiB
+* --lbs512. If set, the size classes are computed assuming 512 byte logical
+  block size. By default 4KiB logical block size is assumed.
+
 bazel build :nvme_latency && sudo bazel-bin/nvme_latency
 
 bazel build :nvme_latency && sudo bazel-bin/nvme_latency \
   --ctrl_id=0 --split_size --lat_min_us=65
+
+Improvement opportunities:
+* Cleanup old entries in the in-flight command map.
+https://docs.ebpf.io/linux/helper-function/bpf_timer_set_callback/
+* Split each bucket to increase the number of buckets
+* Print exclusive and total percentiles within the histogram
+* Compute standard percentiles and print them
+* Query the namespace block sizes and supply them to the BPF to filter sizes
+correctly
+* Print one percent lows and point one percent lows latency
+* Add the ability to skip the latency measurements if the in-flight command
+count or in-flight byte count exceeds a certain threshold
 */
 
 ABSL_DECLARE_FLAG(int, stderrthreshold);
@@ -56,6 +81,8 @@ ABSL_FLAG(bool, trace, false,
           "If set will load a program that includes bpf_printk. Requires a "
           "kernel built with CONFIG_TRACING and CONFIG_BPF_EVENTS. To display "
           "the events cat /sys/kernel/debug/tracing/trace_pipe");
+
+ABSL_FLAG(bool, lbs512, false, "");
 
 static volatile bool exiting = false;
 static void sig_handler(int sig) { exiting = true; }
@@ -313,8 +340,13 @@ absl::Status RunMain() {
 
   auto flag_split_size = absl::GetFlag(FLAGS_split_size);
   if (flag_split_size) {
-    skel->rodata->class1_size_nlb = 4;   // 16 KiB
-    skel->rodata->class2_size_nlb = 16;  // 64 KiB
+    if (absl::GetFlag(FLAGS_lbs512)) {
+      skel->rodata->class1_size_nlb = 4 * 8;   // 16 KiB
+      skel->rodata->class2_size_nlb = 16 * 8;  // 64 KiB
+    } else {
+      skel->rodata->class1_size_nlb = 4;   // 16 KiB
+      skel->rodata->class2_size_nlb = 16;  // 64 KiB
+    }
   }
 
   err = TSkel::load(skel);
