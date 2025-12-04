@@ -1,9 +1,12 @@
 
 #include <iostream>
 #include <ostream>
+#include <random>
 #include <string>
 
 #include "absl/log/log.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "bits.bpf.h"
 #include "gtest/gtest.h"
 
@@ -144,6 +147,51 @@ TEST(Log2, BucketToValue) {
 
   ASSERT_EQ(bpf_log_bucket_low(3), 8);
   ASSERT_EQ(bpf_log_bucket_high(3), 15);
+}
+
+TEST(Log2, HistogramHelperTest) {
+  int64_t lat_min_us = 10;
+  int lat_shift = 2;
+  int max_slots = 13;
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+
+  int64_t max_histogram_value = lat_min_us + (1 << (lat_shift + max_slots - 1));
+  std::uniform_int_distribution<uint64_t> d(0, max_histogram_value + 1000);
+
+  absl::Time end = absl::Now() + absl::Seconds(1);
+  int count = 1000;
+  do {
+    if (count == 0) { count = 1; }
+    uint64_t x = d(gen);
+    int b = bpf_get_bucket(x, lat_min_us, lat_shift, max_slots);
+
+    if (b == -1) {
+      ASSERT_GE(x, max_histogram_value)
+          << "x=" << x << " b=" << b << " lat_min_us=" << lat_min_us
+          << " lat_shift=" << lat_shift << " max_slots=" << max_slots;
+    } else if (b == max_slots) {
+      ASSERT_LT(x, lat_min_us)
+          << "x=" << x << " b=" << b << " lat_min_us=" << lat_min_us
+          << " lat_shift=" << lat_shift << " max_slots=" << max_slots;
+    } else {
+      uint64_t low = bpf_bucket_low(b, lat_min_us, lat_shift, max_slots);
+      uint64_t high = bpf_bucket_high(b, lat_min_us, lat_shift, max_slots);
+      ASSERT_LE(low, x) << "x=" << x << " b=" << b << " blow=" << low
+                        << " bhigh=" << high << " lat_min_us=" << lat_min_us
+                        << " lat_shift=" << lat_shift
+                        << " max_slots=" << max_slots;
+      ASSERT_LT(x, high) << "x=" << x << " b=" << b << " blow=" << low
+                        << " bhigh=" << high << " lat_min_us=" << lat_min_us
+                        << " lat_shift=" << lat_shift
+                        << " max_slots=" << max_slots;
+    }
+
+    ASSERT_EQ(bpf_log_bucket_low(0), 0);
+    ASSERT_EQ(bpf_log_bucket_high(0), 1);
+
+  } while (absl::Now() < end || --count > 0);
 }
 
 }  // namespace
