@@ -46,7 +46,8 @@ ABSL_FLAG(int, ctrl_id, -1,
 ABSL_FLAG(int, nsid, -1, "");
 
 ABSL_FLAG(int, lat_min_us, -1,
-          "The minimum histogram latency to be considered. Provides more granularity around this value.");
+          "The minimum histogram latency to be considered. Provides more "
+          "granularity around this value.");
 ABSL_FLAG(int, lat_shift, -1, "");
 
 ABSL_FLAG(bool, split_size, false, "If set splits the histograms by size");
