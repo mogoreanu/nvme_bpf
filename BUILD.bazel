@@ -133,6 +133,21 @@ genrule(
     cmd = "$(location :bpftool) btf dump file /sys/kernel/btf/nvme_core format c > $@",
 )
 
+cc_library(
+    name = "types_bpf",
+    hdrs = [
+        "types.bpf.h",
+    ],
+)
+
+cc_library(
+    name = "bits_bpf",
+    hdrs = [
+        "bits.bpf.h",
+    ],
+    deps = [":types_bpf"],
+)
+
 bpf_program(
     name = "nvme_trace_bpf_o",
     src = "nvme_trace.bpf.c",
@@ -141,6 +156,7 @@ bpf_program(
         "nvme_trace.h",
         "types.bpf.h",
     ],
+    # deps=[":types_bpf"],
     bpf_object = "nvme_trace.bpf.o",
 )
 
@@ -155,7 +171,6 @@ cc_binary(
     srcs = [
         "nvme_trace.cc",
         "nvme_trace.h",
-        "types.bpf.h",
         ":nvme_trace_skel_h",
     ],
     # Link against system libraries required by libbpf (elf, zlib)
@@ -165,6 +180,7 @@ cc_binary(
     ],
     deps = [
         ":libbpf",
+        ":types_bpf",
         "@abseil-cpp//absl/cleanup",
         "@abseil-cpp//absl/flags:flag",
         "@abseil-cpp//absl/flags:parse",
@@ -217,10 +233,8 @@ bpf_skel(
 cc_binary(
     name = "nvme_latency",
     srcs = [
-        "bits.bpf.h",
         "nvme_latency.cc",
         "nvme_latency.h",
-        "types.bpf.h",
         ":nvme_latency_bpf_skel_h",
         ":nvme_latency_vlog_bpf_skel_h",
     ],
@@ -234,6 +248,7 @@ cc_binary(
         ":libbpf",
         ":nvme_abi",
         ":nvme_strings",
+        ":bits_bpf",
         "@abseil-cpp//absl/cleanup",
         "@abseil-cpp//absl/flags:flag",
         "@abseil-cpp//absl/flags:parse",
@@ -249,22 +264,21 @@ cc_binary(
 cc_test(
     name = "bits_bpf_test",
     srcs = [
-        "bits.bpf.h",
         "bits_bpf_test.cc",
-        "types.bpf.h",
     ],
     deps = [
+        ":bits_bpf",
         "@abseil-cpp//absl/log",
         "@googletest//:gtest",
         "@googletest//:gtest_main",
     ],
 )
 
-
 cc_test(
     name = "histogram_benchmarks",
-    srcs = ["histogram_benchmarks.cc", "bits.bpf.h", "types.bpf.h"],
+    srcs = ["histogram_benchmarks.cc"],
     deps = [
+        ":bits_bpf",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/random",
         "@google_benchmark//:benchmark_main",

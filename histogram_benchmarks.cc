@@ -23,9 +23,9 @@ sudo cpufreq-set -g powersave
 -------------------------------------------------------------------
 Benchmark                         Time             CPU   Iterations
 -------------------------------------------------------------------
-BM_HistogramBaseline           15.8 ns         15.8 ns     48650142
-BM_HistogramBpfClzll           24.8 ns         24.8 ns     28477328
-BM_HistogramBuiltinClzll       15.2 ns         15.2 ns     46503933
+BM_HistogramBaseline           15.2 ns         15.2 ns     46333995
+BM_HistogramBpfClzll           25.2 ns         25.2 ns     28842895
+BM_HistogramBuiltinClzll       16.2 ns         16.2 ns     41623624
 */
 
 namespace mogo {
