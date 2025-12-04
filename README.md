@@ -3,11 +3,19 @@ Tools to debug and monitor linux NVMe activity using BPF / eBPF tracepoints / kp
 
 ## Install Dependencies
 
+Install bazel using the bazelisk binary, it will provide a more up-to-date 
+version that may be required for some of the example invocations.
+```bash
+wget 'https://github.com/bazelbuild/bazelisk/releases/download/v1.27.0/bazelisk-linux-amd64'
+chmod +x bazelisk-linux-amd64
+mv bazelisk-linux-amd64 /usr/bin/bazel
+```
+
 You will need `clang` (at least v11 or later), `libelf` and `zlib` to build
 the examples, package names may vary across distros.
 
 ```shell
-apt install clang libelf1 libelf-dev zlib1g-dev
+apt install git clang g++ libelf1 libelf-dev zlib1g-dev libssl-dev sudo
 ```
 
 ## Getting the source code
@@ -15,6 +23,7 @@ apt install clang libelf1 libelf-dev zlib1g-dev
 Download the git repository and check out submodules:
 ```bash
 git clone --recurse-submodules https://github.com/mogoreanu/nvme_bpf
+cd nvme_bpf
 ```
 
 If you happened to have cloned without `--recurse-submodules` you can update
