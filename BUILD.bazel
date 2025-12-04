@@ -129,8 +129,8 @@ genrule(
     name = "nvme_core_gen_h",
     srcs = [],
     outs = ["nvme_core_gen.h"],
-    tools = [":bpftool"],
     cmd = "$(location :bpftool) btf dump file /sys/kernel/btf/nvme_core format c > $@",
+    tools = [":bpftool"],
 )
 
 cc_library(
@@ -220,8 +220,8 @@ bpf_program(
         "nvme_latency.h",
         "types.bpf.h",
     ],
-    clang_args= "-DVLOG",
     bpf_object = "nvme_latency_vlog.bpf.o",
+    clang_args = "-DVLOG",
 )
 
 bpf_skel(
@@ -245,10 +245,10 @@ cc_binary(
         "-lz",
     ],
     deps = [
+        ":bits_bpf",
         ":libbpf",
         ":nvme_abi",
         ":nvme_strings",
-        ":bits_bpf",
         "@abseil-cpp//absl/cleanup",
         "@abseil-cpp//absl/flags:flag",
         "@abseil-cpp//absl/flags:parse",

@@ -1,6 +1,6 @@
 """ BPF build rules."""
 
-def bpf_program(name, src, bpf_object, hdrs = [], clang_args="", **kwargs):
+def bpf_program(name, src, bpf_object, hdrs = [], clang_args = "", **kwargs):
     native.genrule(
         name = name,
         srcs = [src] + hdrs + [
