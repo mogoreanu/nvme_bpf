@@ -190,9 +190,28 @@ bpf_program(
 )
 
 bpf_skel(
-    name = "nvme_latency_skel_h",
+    name = "nvme_latency_bpf_skel_h",
     bpf_object = ":nvme_latency_bpf_o",
-    skel_header = "nvme_latency.skel.h",
+    skel_header = "nvme_latency_bpf.skel.h",
+)
+
+bpf_program(
+    name = "nvme_latency_vlog_bpf_o",
+    src = "nvme_latency.bpf.c",
+    hdrs = [
+        "bits.bpf.h",
+        "nvme_core_gen.h",
+        "nvme_latency.h",
+        "types.bpf.h",
+    ],
+    clang_args= "-DVLOG",
+    bpf_object = "nvme_latency_vlog.bpf.o",
+)
+
+bpf_skel(
+    name = "nvme_latency_vlog_bpf_skel_h",
+    bpf_object = ":nvme_latency_vlog_bpf_o",
+    skel_header = "nvme_latency_vlog_bpf.skel.h",
 )
 
 cc_binary(
@@ -202,7 +221,8 @@ cc_binary(
         "nvme_latency.cc",
         "nvme_latency.h",
         "types.bpf.h",
-        ":nvme_latency_skel_h",
+        ":nvme_latency_bpf_skel_h",
+        ":nvme_latency_vlog_bpf_skel_h",
     ],
     cxxopts = ["-std=c++20"],
     # Link against system libraries required by libbpf (elf, zlib)

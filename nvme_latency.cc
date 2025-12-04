@@ -28,7 +28,8 @@
 #include "absl/time/time.h"
 #include "bits.bpf.h"
 #include "nvme_abi.h"
-#include "nvme_latency.skel.h"
+#include "nvme_latency_bpf.skel.h"
+#include "nvme_latency_vlog_bpf.skel.h"
 #include "nvme_strings.h"
 
 /*
@@ -44,10 +45,16 @@ ABSL_FLAG(int, ctrl_id, -1,
           "NVMe controller ID to filter on, -1 for all controllers");
 ABSL_FLAG(int, nsid, -1, "");
 
-ABSL_FLAG(int, lat_min_us, -1, "");
+ABSL_FLAG(int, lat_min_us, -1,
+          "The minimum histogram latency to be considered. Provides more granularity around this value.");
 ABSL_FLAG(int, lat_shift, -1, "");
 
-ABSL_FLAG(bool, split_size, false, "");
+ABSL_FLAG(bool, split_size, false, "If set splits the histograms by size");
+
+ABSL_FLAG(bool, trace, false,
+          "If set will load a program that includes bpf_printk. Requires a "
+          "kernel built with CONFIG_TRACING and CONFIG_BPF_EVENTS. To display "
+          "the events cat /sys/kernel/debug/tracing/trace_pipe");
 
 static volatile bool exiting = false;
 static void sig_handler(int sig) { exiting = true; }
@@ -125,8 +132,8 @@ struct TupleHash {
   }
 };
 
-absl::Status PrintAllHists(struct nvme_latency_bpf* skel) {
-  int fd = bpf_map__fd(skel->maps.hists);
+absl::Status PrintAllHists(struct bpf_map* hists) {
+  int fd = bpf_map__fd(hists);
   if (fd < 0) {
     if (fd == -1) {
       std::cerr << "BPF latency histogram map not created. " << std::endl;
@@ -265,8 +272,9 @@ absl::Status PrintAllInFlight(struct nvme_latency_bpf* skel) {
   return absl::OkStatus();
 }
 
+template <typename TSkel>
 absl::Status RunMain() {
-  struct nvme_latency_bpf* skel;
+  TSkel* skel;
   int err;
 
   libbpf_set_print(libbpf_print_fn);
@@ -274,12 +282,12 @@ absl::Status RunMain() {
   signal(SIGINT, sig_handler);
   signal(SIGTERM, sig_handler);
 
-  skel = nvme_latency_bpf::open();
+  skel = TSkel::open();
   if (skel == nullptr) {
     return absl::InternalError("Failed to open and load BPF skeleton");
   }
   auto skel_destroy_cleanup =
-      absl::MakeCleanup([&skel]() { nvme_latency_bpf::destroy(skel); });
+      absl::MakeCleanup([&skel]() { TSkel::destroy(skel); });
 
   auto filter_ctrl_id = absl::GetFlag(FLAGS_ctrl_id);
   if (filter_ctrl_id >= 0) {
@@ -308,19 +316,19 @@ absl::Status RunMain() {
     skel->rodata->class2_size_nlb = 16;  // 64 KiB
   }
 
-  err = nvme_latency_bpf::load(skel);
+  err = TSkel::load(skel);
   if (err) {
     return absl::InternalError(
         absl::StrCat("Failed to load and verify BPF skeleton, err=", err));
   }
 
-  err = nvme_latency_bpf::attach(skel);
+  err = TSkel::attach(skel);
   if (err) {
     return absl::InternalError(
         absl::StrCat("Failed to attach BPF skeleton, err=", err));
   }
   auto skel_detach_cleanup =
-      absl::MakeCleanup([&skel]() { nvme_latency_bpf::detach(skel); });
+      absl::MakeCleanup([&skel]() { TSkel::detach(skel); });
 
   std::cout << "Successfully started!" << std::endl;
 
@@ -329,7 +337,7 @@ absl::Status RunMain() {
     auto now = absl::Now();
     if (now > next_print) {
       std::cout << "=====================" << std::endl;
-      PrintAllHists(skel).IgnoreError();
+      PrintAllHists(skel->maps.hists).IgnoreError();
       next_print = now + absl::Seconds(1);
     }
     absl::SleepFor(absl::Milliseconds(50));
@@ -342,7 +350,12 @@ int main(int argc, char** argv) {
   absl::ParseCommandLine(argc, argv);
   absl::InitializeLog();
 
-  absl::Status main_status = RunMain();
+  absl::Status main_status;
+  if (absl::GetFlag(FLAGS_trace)) {
+    main_status = RunMain<nvme_latency_vlog_bpf>();
+  } else {
+    main_status = RunMain<nvme_latency_bpf>();
+  }
   if (!main_status.ok()) {
     std::cerr << main_status;
     return EXIT_FAILURE;

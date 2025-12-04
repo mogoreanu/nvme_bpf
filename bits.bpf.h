@@ -3,7 +3,10 @@
 
 #include "types.bpf.h"
 
+// Maybe there's a way to optimize this inefficient clz
+// https://stackoverflow.com/questions/70308156/how-to-efficiently-count-leading-zeros-in-a-24-bit-unsigned-integer
 int bpf_clzll(u64 x) {
+  // __builtin_clzll causes a segfault in clang
   int zeroes = 63;
   if (x >> 32) {
     zeroes -= 32;

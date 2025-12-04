@@ -1,6 +1,6 @@
 """ BPF build rules."""
 
-def bpf_program(name, src, bpf_object, hdrs = [], **kwargs):
+def bpf_program(name, src, bpf_object, hdrs = [], clang_args="", **kwargs):
     native.genrule(
         name = name,
         srcs = [src] + hdrs + [
@@ -29,12 +29,13 @@ def bpf_program(name, src, bpf_object, hdrs = [], **kwargs):
 
             clang -g -O2 -target bpf \
                 -D__TARGET_ARCH_x86 \
+                %s \
                 -I . \
                 -I $$(pwd) \
                 -I $(GENDIR) \
                 -c $(location %s) \
                 -o $@
-        """ % src,
+        """ % (clang_args, src),
         **kwargs
     )
 
