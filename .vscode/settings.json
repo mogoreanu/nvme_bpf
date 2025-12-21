@@ -21,4 +21,5 @@
     "C_Cpp.default.includePath": [
         "/usr/src/linux-headers-6.1.0-40-common/include/",
     ],
+    "cmake.ignoreCMakeListsMissing": true,
 }
