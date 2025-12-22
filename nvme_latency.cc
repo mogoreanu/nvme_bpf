@@ -97,7 +97,10 @@ ABSL_FLAG(bool, trace, false,
 ABSL_FLAG(bool, lbs512, false, "");
 
 static volatile bool exiting = false;
-static void sig_handler(int sig) { exiting = true; }
+static void sig_handler(int sig) {
+  exiting = true;
+  std::cout << "Exiting on signal " << sig << std::endl;
+}
 
 static int libbpf_print_fn(enum libbpf_print_level level, const char* format,
                            va_list args) {
