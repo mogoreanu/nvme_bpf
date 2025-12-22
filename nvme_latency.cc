@@ -141,19 +141,20 @@ absl::Status PrintAllHists(struct bpf_map* hists) {
   }
 
   struct latency_hist_key dummy_key;
-  std::set<decltype(dummy_key.ctrl_id)> controllers;
-  std::set<decltype(dummy_key.opcode)> opcodes;
-  std::set<decltype(dummy_key.size_class)> sizes;
-  std::unordered_set<
-      std::tuple<decltype(dummy_key.ctrl_id), decltype(dummy_key.opcode),
-                 decltype(dummy_key.size_class)>,
-      TupleHash<decltype(dummy_key.ctrl_id), decltype(dummy_key.opcode),
-                decltype(dummy_key.size_class)>>
+  using TCtrlId = decltype(dummy_key.ctrl_id);
+  using TOpcode = decltype(dummy_key.opcode);
+  using TSizeClass = decltype(dummy_key.size_class);
+
+  std::set<TCtrlId> controllers;
+  std::set<TOpcode> opcodes;
+  std::set<TSizeClass> sizes;
+  std::unordered_set<std::tuple<TCtrlId, TOpcode, TSizeClass>,
+                     TupleHash<TCtrlId, TOpcode, TSizeClass>>
       keys;
 
   {
     struct latency_hist_key lookup_key = {};
-    lookup_key.ctrl_id = std::numeric_limits<u32>::max();
+    lookup_key.ctrl_id = std::numeric_limits<TCtrlId>::max();
     lookup_key.opcode = 0;
     struct latency_hist_key next_key;
 
@@ -271,13 +272,15 @@ absl::Status PrintAllInFlight(struct nvme_latency_bpf* skel) {
 
 template <typename TSkel>
 absl::Status RunMain() {
-  TSkel* skel;
-  int err;
-
+  // Set up libbpf errors and debug info callback.
   libbpf_set_print(libbpf_print_fn);
 
+  // Handle SIGINT and SIGTERM to exit gracefully.
   signal(SIGINT, sig_handler);
   signal(SIGTERM, sig_handler);
+
+  TSkel* skel;
+  int err;
 
   skel = TSkel::open();
   if (skel == nullptr) {
@@ -286,6 +289,7 @@ absl::Status RunMain() {
   auto skel_destroy_cleanup =
       absl::MakeCleanup([&skel]() { TSkel::destroy(skel); });
 
+  // Initialize skel filters and parameters.
   auto filter_ctrl_id = absl::GetFlag(FLAGS_ctrl_id);
   if (filter_ctrl_id >= 0) {
     skel->rodata->filter_ctrl_id = filter_ctrl_id;
@@ -294,14 +298,11 @@ absl::Status RunMain() {
   if (flag_lat_min_us >= 0) {
     skel->rodata->latency_min = flag_lat_min_us;
   }
-  g_lat_hist.lat_min_us = skel->rodata->latency_min;
 
   auto flag_lat_shift = absl::GetFlag(FLAGS_lat_shift);
   if (flag_lat_shift >= 0) {
     skel->rodata->latency_shift = flag_lat_shift;
   }
-  g_lat_hist.lat_shift = skel->rodata->latency_shift;
-  g_lat_hist.max_slots = LATENCY_MAX_SLOTS;
 
   auto flag_nsid = absl::GetFlag(FLAGS_nsid);
   if (flag_nsid >= 0) {
@@ -318,6 +319,11 @@ absl::Status RunMain() {
       skel->rodata->class2_size_nlb = 16;  // 64 KiB
     }
   }
+
+  // Read global values, either set in the skel or overridden from flags above.
+  g_lat_hist.lat_min_us = skel->rodata->latency_min;
+  g_lat_hist.lat_shift = skel->rodata->latency_shift;
+  g_lat_hist.max_slots = LATENCY_MAX_SLOTS;
 
   err = TSkel::load(skel);
   if (err) {

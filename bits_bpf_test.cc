@@ -34,5 +34,18 @@ TEST(Log2, ValueToBucket) {
   ASSERT_EQ(bpf_log2(16), 4);
 }
 
+TEST(Log2, BucketToValue) {
+  ASSERT_EQ(bpf_log_bucket_low(0), 0);
+  ASSERT_EQ(bpf_log_bucket_high(0), 1);
+
+  ASSERT_EQ(bpf_log_bucket_low(1), 2);
+  ASSERT_EQ(bpf_log_bucket_high(1), 3);
+
+  ASSERT_EQ(bpf_log_bucket_low(2), 4);
+  ASSERT_EQ(bpf_log_bucket_high(2), 7);
+
+  ASSERT_EQ(bpf_log_bucket_low(3), 8);
+  ASSERT_EQ(bpf_log_bucket_high(3), 15);
+}
 
 }  // namespace

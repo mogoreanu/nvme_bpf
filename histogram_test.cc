@@ -117,20 +117,6 @@ TEST(BpfHistogram, BucketToValue) {
   ASSERT_EQ(bpf_bucket_high(3, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 42);
 }
 
-TEST(Log2, BucketToValue) {
-  ASSERT_EQ(bpf_log_bucket_low(0), 0);
-  ASSERT_EQ(bpf_log_bucket_high(0), 1);
-
-  ASSERT_EQ(bpf_log_bucket_low(1), 2);
-  ASSERT_EQ(bpf_log_bucket_high(1), 3);
-
-  ASSERT_EQ(bpf_log_bucket_low(2), 4);
-  ASSERT_EQ(bpf_log_bucket_high(2), 7);
-
-  ASSERT_EQ(bpf_log_bucket_low(3), 8);
-  ASSERT_EQ(bpf_log_bucket_high(3), 15);
-}
-
 TEST(Log2, HistogramHelperTest) {
   int64_t lat_min_us = 10;
   int lat_shift = 2;
