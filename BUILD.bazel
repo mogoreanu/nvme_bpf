@@ -148,6 +148,56 @@ cc_library(
     deps = [":types_bpf"],
 )
 
+cc_library(
+    name = "histogram_bpf",
+    hdrs = [
+        "histogram.bpf.h",
+    ],
+    deps = [
+        ":bits_bpf",
+        ":types_bpf",
+    ],
+)
+
+cc_library(
+    name = "histogram",
+    srcs = [
+        "histogram.cc",
+    ],
+    hdrs = [
+        "histogram.h",
+    ],
+    deps = [
+        ":histogram_bpf",
+        "@abseil-cpp//absl/status",
+    ],
+)
+
+cc_test(
+    name = "histogram_test",
+    srcs = [
+        "histogram_test.cc",
+    ],
+    deps = [
+        ":histogram",
+        "@abseil-cpp//absl/log",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "histogram_benchmarks",
+    srcs = ["histogram_benchmarks.cc"],
+    deps = [
+        ":histogram_bpf",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/random",
+        "@google_benchmark//:benchmark_main",
+        "@googletest//:gtest",
+    ],
+)
+
 bpf_program(
     name = "nvme_trace_bpf_o",
     src = "nvme_trace.bpf.c",
@@ -198,6 +248,7 @@ bpf_program(
     src = "nvme_latency.bpf.c",
     hdrs = [
         "bits.bpf.h",
+        "histogram.bpf.h",
         "nvme_core_gen.h",
         "nvme_latency.h",
         "types.bpf.h",
@@ -216,6 +267,7 @@ bpf_program(
     src = "nvme_latency.bpf.c",
     hdrs = [
         "bits.bpf.h",
+        "histogram.bpf.h",
         "nvme_core_gen.h",
         "nvme_latency.h",
         "types.bpf.h",
@@ -245,7 +297,8 @@ cc_binary(
         "-lz",
     ],
     deps = [
-        ":bits_bpf",
+        ":histogram",
+        ":histogram_bpf",
         ":libbpf",
         ":nvme_abi",
         ":nvme_strings",
@@ -271,17 +324,5 @@ cc_test(
         "@abseil-cpp//absl/log",
         "@googletest//:gtest",
         "@googletest//:gtest_main",
-    ],
-)
-
-cc_test(
-    name = "histogram_benchmarks",
-    srcs = ["histogram_benchmarks.cc"],
-    deps = [
-        ":bits_bpf",
-        "@abseil-cpp//absl/log",
-        "@abseil-cpp//absl/random",
-        "@google_benchmark//:benchmark_main",
-        "@googletest//:gtest",
     ],
 )

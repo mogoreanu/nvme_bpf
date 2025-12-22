@@ -6,7 +6,7 @@
 #include "absl/log/log.h"
 #include "absl/random/random.h"
 #include "benchmark/benchmark.h"
-#include "bits.bpf.h"
+#include "histogram.bpf.h"
 #include "gtest/gtest.h"
 
 /*
@@ -20,12 +20,20 @@ bazel build -c opt  --dynamic_mode=off :histogram_benchmarks \
 
 sudo cpufreq-set -g powersave
 
+Running bazel-bin/histogram_benchmarks
+Run on (72 X 3700 MHz CPU s)
+CPU Caches:
+  L1 Data 32 KiB (x36)
+  L1 Instruction 32 KiB (x36)
+  L2 Unified 1024 KiB (x36)
+  L3 Unified 25344 KiB (x2)
+Load Average: 5.10, 5.31, 5.32
 -------------------------------------------------------------------
 Benchmark                         Time             CPU   Iterations
 -------------------------------------------------------------------
-BM_HistogramBaseline           15.2 ns         15.2 ns     46333995
-BM_HistogramBpfClzll           25.2 ns         25.2 ns     28842895
-BM_HistogramBuiltinClzll       16.2 ns         16.2 ns     41623624
+BM_HistogramBaseline           18.7 ns         18.7 ns     37263693
+BM_HistogramBpfClzll           28.9 ns         28.9 ns     24279760
+BM_HistogramBuiltinClzll       19.3 ns         19.3 ns     36380711
 */
 
 namespace mogo {

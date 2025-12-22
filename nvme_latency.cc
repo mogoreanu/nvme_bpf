@@ -27,7 +27,8 @@
 #include "absl/strings/str_join.h"
 #include "absl/strings/strip.h"
 #include "absl/time/time.h"
-#include "bits.bpf.h"
+#include "histogram.bpf.h"
+#include "histogram.h"
 #include "nvme_abi.h"
 #include "nvme_latency_bpf.skel.h"
 #include "nvme_latency_vlog_bpf.skel.h"
@@ -49,9 +50,18 @@ Useful flags / settings:
 
 bazel build :nvme_latency && sudo bazel-bin/nvme_latency
 
+# Example usage:
 bazel build :nvme_latency && cp -f bazel-bin/nvme_latency /tmp/nvme_latency && \
-sudo /tmp/nvme_latency \
-  --ctrl_id=0 --split_size --lat_min_us=65
+sudo /tmp/nvme_latency --ctrl_id=0 --split_size --lat_min_us=65
+
+# Home nvme3
+bazel build :nvme_latency && cp -f bazel-bin/nvme_latency /tmp/nvme_latency && \
+sudo /tmp/nvme_latency   --ctrl_id=3 --split_size --lat_min_us=65
+
+# Home generate 300000 IO.
+fio --name=read_lat_1 --thread=1   --ioengine=libaio --size=1200000K \
+  --filesize=100% --direct=1 --randrepeat=0 --norandommap=1 \
+  --filename=/dev/nvme3n1   --rw=randread --iodepth=1 --bs=4K
 
 Improvement opportunities:
 * Cleanup old entries in the in-flight command map.
@@ -97,91 +107,16 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char* format,
   return 0;
 }
 
-int global_lat_min_us = 0;
-int global_lat_shift = 0;
-
-u64 my_bpf_bucket_low(int slot) {
-  return bpf_bucket_low(slot, global_lat_min_us, global_lat_shift,
-                        LATENCY_MAX_SLOTS);
-}
-
-u64 my_bpf_bucket_high(int slot) {
-  return bpf_bucket_high(slot, global_lat_min_us, global_lat_shift,
-                         LATENCY_MAX_SLOTS);
-}
+// Latency histogram parameters.
+nvme_bpf::Histogram g_lat_hist;
 
 absl::Status PrintHist(const struct latency_hist& hist) {
-  int first_nonzero_slot = 0;
-  while (first_nonzero_slot < LATENCY_MAX_SLOTS &&
-         hist.slots[first_nonzero_slot] == 0) {
-    ++first_nonzero_slot;
-  }
-  if (first_nonzero_slot == LATENCY_MAX_SLOTS) {
-    std::cout << "  (all zero slots)" << std::endl;
-    return absl::OkStatus();
-  }
-  int last_nonzero_slot = LATENCY_MAX_SLOTS - 1;
-  while (last_nonzero_slot >= first_nonzero_slot &&
-         hist.slots[last_nonzero_slot] == 0) {
-    --last_nonzero_slot;
-  }
+  nvme_bpf::Histogram histogram = g_lat_hist;
 
-  uint64_t computed_total_count = hist.slots[LATENCY_MAX_SLOTS];
-
-  for (int slot = first_nonzero_slot; slot <= last_nonzero_slot; ++slot) {
-    computed_total_count += hist.slots[slot];
-  }
-
-  if (computed_total_count != hist.total_count) {
-    std::cerr << "Warning: total_count mismatch: computed="
-              << computed_total_count << ", recorded=" << hist.total_count
-              << std::endl;
-  }
-
-  std::vector<std::vector<std::string>> rows;
-  rows.push_back({"Latency Range", "Count", "Cumulative Percent"});
-
-  uint64_t accumulated_total_count = 0;
-  if (hist.slots[LATENCY_MAX_SLOTS] != 0) {
-    accumulated_total_count += hist.slots[LATENCY_MAX_SLOTS];
-    rows.push_back(
-        {absl::StrCat("  [", my_bpf_bucket_low(LATENCY_MAX_SLOTS), "us - ",
-                      my_bpf_bucket_high(LATENCY_MAX_SLOTS), "us):"),
-         absl::StrCat(hist.slots[LATENCY_MAX_SLOTS]),
-         absl::StrCat(100.0 * accumulated_total_count / computed_total_count)});
-  }
-
-  for (int slot = first_nonzero_slot; slot <= last_nonzero_slot; ++slot) {
-    accumulated_total_count += hist.slots[slot];
-    rows.push_back(
-        {absl::StrCat("  [", my_bpf_bucket_low(slot), "us - ",
-                      my_bpf_bucket_high(slot), "us):"),
-         absl::StrCat(hist.slots[slot]),
-         absl::StrCat(100.0 * accumulated_total_count / computed_total_count)});
-  }
-
-  using TColWidth = decltype(rows[0][0].size());
-  std::vector<TColWidth> max_col_width;
-  for (const auto& row : rows) {
-    if (max_col_width.size() < row.size()) {
-      max_col_width.resize(row.size(), 0);
-    }
-    for (TColWidth col = 0; col < row.size(); ++col) {
-      if (row[col].size() > max_col_width[col]) {
-        max_col_width[col] = row[col].size();
-      }
-    }
-  }
-  for (const auto& row : rows) {
-    for (TColWidth col = 0; col < row.size(); ++col) {
-      std::cout << std::left << std::setw(max_col_width[col] + 2) << row[col];
-    }
-    std::cout << std::endl;
-  }
-  std::cout << "  Total count: " << hist.total_count
-            << " avg=" << static_cast<double>(hist.total_sum) / hist.total_count
-            << std::endl;
-  return absl::OkStatus();
+  histogram.slots = hist.slots;
+  histogram.total_count = hist.total_count;
+  histogram.total_sum = hist.total_sum;
+  return nvme_bpf::PrintHistogram(histogram);
 }
 
 template <typename T1, typename T2, typename T3>
@@ -359,13 +294,14 @@ absl::Status RunMain() {
   if (flag_lat_min_us >= 0) {
     skel->rodata->latency_min = flag_lat_min_us;
   }
-  global_lat_min_us = skel->rodata->latency_min;
+  g_lat_hist.lat_min_us = skel->rodata->latency_min;
 
   auto flag_lat_shift = absl::GetFlag(FLAGS_lat_shift);
   if (flag_lat_shift >= 0) {
     skel->rodata->latency_shift = flag_lat_shift;
   }
-  global_lat_shift = skel->rodata->latency_shift;
+  g_lat_hist.lat_shift = skel->rodata->latency_shift;
+  g_lat_hist.max_slots = LATENCY_MAX_SLOTS;
 
   auto flag_nsid = absl::GetFlag(FLAGS_nsid);
   if (flag_nsid >= 0) {

@@ -7,7 +7,7 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 
-#include "bits.bpf.h"
+#include "histogram.bpf.h"
 #include "types.bpf.h"
 
 char LICENSE[] SEC("license") = "MIT";

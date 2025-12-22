@@ -5,7 +5,7 @@
 
 // Maybe there's a way to optimize this inefficient clz
 // https://stackoverflow.com/questions/70308156/how-to-efficiently-count-leading-zeros-in-a-24-bit-unsigned-integer
-int bpf_clzll(u64 x) {
+inline int bpf_clzll(u64 x) {
   // __builtin_clzll causes a segfault in clang
   int zeroes = 63;
   if (x >> 32) {
@@ -37,42 +37,6 @@ int bpf_clzll(u64 x) {
   } else {
     return zeroes + 1;
   }
-}
-
-static inline int bpf_get_bucket(u64 v, u64 min, int shift, int max_slots) {
-  if (v < min) {
-    return max_slots;
-  }
-  v -= min;
-  v >>= shift;
-  if (v == 0) {
-    return 0;
-  }
-  int s = 64 - bpf_clzll(v);
-  if (s >= max_slots) {
-    return -1;
-  }
-  return s;
-}
-
-static inline u64 bpf_bucket_high(int slot, u64 min, int shift, int max_slots) {
-  if (slot == max_slots) {
-    return min;
-  }
-  if (slot == 0) {
-    return min + ((u64)1 << shift);
-  }
-  return min + ((u64)1 << (slot + shift));
-}
-
-static inline u64 bpf_bucket_low(int slot, u64 min, int shift, int max_slots) {
-  if (slot == max_slots) {
-    return 0;
-  }
-  if (slot == 0) {
-    return min;
-  }
-  return bpf_bucket_high(slot - 1, min, shift, max_slots);
 }
 
 static inline u64 bpf_log2(u32 v) {
