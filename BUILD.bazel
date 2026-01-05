@@ -122,6 +122,7 @@ cc_library(
     srcs = ["nvme_strings.cc"],
     hdrs = ["nvme_strings.h"],
     cxxopts = ["-std=c++20"],
+    copts = ["-Wno-packed-bitfield-compat"],
     deps = [":nvme_abi"],
 )
 
@@ -291,6 +292,7 @@ cc_binary(
         ":nvme_latency_vlog_bpf_skel_h",
     ],
     cxxopts = ["-std=c++20"],
+    copts = ["-Wno-packed-bitfield-compat"],
     # Link against system libraries required by libbpf (elf, zlib)
     linkopts = [
         "-lelf",
