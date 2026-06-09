@@ -14,7 +14,7 @@
 // Define the maximum number of histogram slots (log2(microseconds))
 #define MAX_SLOTS 27 // Up to 2^26 us = 67 seconds
 
-char LICENSE[] SEC("license") = "GPL";
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 /*
  * Map to store start timestamps.

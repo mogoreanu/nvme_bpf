@@ -1,5 +1,3 @@
-// vmlinux overlaps with nvme_core which we need for nvme trace data structures
-// #include "vmlinux.h"
 // clang-format off
 #include "nvme_core_gen.h"
 typedef _Bool bool;
@@ -21,9 +19,10 @@ struct {
 
 SEC("tp/nvme/nvme_setup_cmd")
 int handle_nvme_setup_cmd(struct trace_event_raw_nvme_setup_cmd* ctx) {
-  // bpf_printk("nvme_setup_cmd: PID %d, qid=%d, cid=%d, opcode=0x%x\n",
-  //            bpf_get_current_pid_tgid() >> 32, ctx->qid, ctx->cid,
-  //            ctx->opcode);
+#ifdef VLOG
+  bpf_printk("nvme_setup_cmd: PID %d, qid=%d, cid=%d, opcode=0x%x",
+             bpf_get_current_pid_tgid() >> 32, ctx->qid, ctx->cid, ctx->opcode);
+#endif
   if (filter_ctrl_id != ALL_CTRL_ID && ctx->ctrl_id != (int)filter_ctrl_id) {
     return 0;
   }
@@ -43,7 +42,9 @@ int handle_nvme_setup_cmd(struct trace_event_raw_nvme_setup_cmd* ctx) {
   e->fctype = ctx->fctype;
   bpf_probe_read_kernel_str(e->disk, sizeof(e->disk), ctx->disk);
   int cdw_size = sizeof(e->cdw10);
-  if (sizeof(ctx->cdw10) < cdw_size) { cdw_size = sizeof(ctx->cdw10); }
+  if (sizeof(ctx->cdw10) < cdw_size) {
+    cdw_size = sizeof(ctx->cdw10);
+  }
   bpf_probe_read_kernel(e->cdw10, cdw_size, ctx->cdw10);
 
   bpf_ringbuf_submit(e, 0);
@@ -52,9 +53,10 @@ int handle_nvme_setup_cmd(struct trace_event_raw_nvme_setup_cmd* ctx) {
 
 SEC("tp/nvme/nvme_complete_rq")
 int handle_nvme_complete_rq(struct trace_event_raw_nvme_complete_rq* ctx) {
-  // bpf_printk("nvme_complete_rq: PID %d, disk=%s, qid=%d, cid=%d\n",
-  //            bpf_get_current_pid_tgid() >> 32, ctx->disk, ctx->qid,
-  //            ctx->cid);
+#ifdef VLOG
+  bpf_printk("nvme_complete_rq: PID %d, disk=%s, qid=%d, cid=%d",
+             bpf_get_current_pid_tgid() >> 32, ctx->disk, ctx->qid, ctx->cid);
+#endif
   if (filter_ctrl_id != ALL_CTRL_ID && ctx->ctrl_id != (int)filter_ctrl_id) {
     return 0;
   }

@@ -27,6 +27,7 @@
 #include "absl/time/time.h"
 #include "nvme_strings.h"
 #include "nvme_trace.skel.h"
+#include "nvme_trace_vlog_bpf.skel.h"
 
 /*
 bazel build :nvme_trace && sudo $(pwd)/bazel-bin/nvme_trace
@@ -35,6 +36,11 @@ bazel build :nvme_trace && sudo $(pwd)/bazel-bin/nvme_trace
 ABSL_DECLARE_FLAG(int, stderrthreshold);
 ABSL_FLAG(int, ctrl_id, -1,
           "NVMe controller ID to filter on, -1 for all controllers");
+
+ABSL_FLAG(bool, bpf_trace, false,
+          "If set will load a program that includes bpf_printk. Requires a "
+          "kernel built with CONFIG_TRACING and CONFIG_BPF_EVENTS. To display "
+          "the events cat /sys/kernel/debug/tracing/trace_pipe");
 
 static volatile bool exiting = false;
 static void sig_handler(int sig) { exiting = true; }
@@ -138,9 +144,10 @@ int HandleNvmeEvent(void* ctx, void* data, size_t data_sz) {
   return 0;
 }
 
+template <typename TSkel>
 absl::Status RunMain() {
   struct ring_buffer* nvme_trace_events;
-  struct nvme_trace_bpf* skel;
+  TSkel* skel;
   int err;
 
   libbpf_set_print(libbpf_print_fn);
@@ -149,12 +156,12 @@ absl::Status RunMain() {
   signal(SIGTERM, sig_handler);
 
   LIBBPF_OPTS(bpf_object_open_opts, open_opts, .kernel_log_level = 2, );
-  skel = nvme_trace_bpf::open(&open_opts);
+  skel = TSkel::open(&open_opts);
   if (skel == nullptr) {
     return absl::InternalError("Failed to open and load BPF skeleton");
   }
   auto skel_destroy_cleanup =
-      absl::MakeCleanup([skel]() { nvme_trace_bpf::destroy(skel); });
+      absl::MakeCleanup([skel]() { TSkel::destroy(skel); });
 
   auto filter_ctrl_id = absl::GetFlag(FLAGS_ctrl_id);
   if (filter_ctrl_id >= 0) {
@@ -182,7 +189,7 @@ absl::Status RunMain() {
         free(complete_log_buf);
       });
 
-  err = nvme_trace_bpf::load(skel);
+  err = TSkel::load(skel);
   if (err) {
     if (setup_log_buf && setup_log_buf[0]) {
       std::cerr << "Verifier log for handle_nvme_setup_cmd:\n"
@@ -196,13 +203,13 @@ absl::Status RunMain() {
         absl::StrCat("Failed to load and verify BPF skeleton, err=", err));
   }
 
-  err = nvme_trace_bpf::attach(skel);
+  err = TSkel::attach(skel);
   if (err) {
     return absl::InternalError(
         absl::StrCat("Failed to attach BPF skeleton, err=", err));
   }
   auto skel_detach_cleanup =
-      absl::MakeCleanup([skel]() { nvme_trace_bpf::detach(skel); });
+      absl::MakeCleanup([skel]() { TSkel::detach(skel); });
 
   /* Set up ring buffer polling */
   nvme_trace_events =
@@ -236,7 +243,12 @@ int main(int argc, char** argv) {
   absl::ParseCommandLine(argc, argv);
   absl::InitializeLog();
 
-  absl::Status status = RunMain();
+  absl::Status status;
+  if (absl::GetFlag(FLAGS_bpf_trace)) {
+    status = RunMain<nvme_trace_vlog_bpf>();
+  } else {
+    status = RunMain<nvme_trace_bpf>();
+  }
   if (!status.ok()) {
     LOG(ERROR) << "Error: " << status;
     return EXIT_FAILURE;

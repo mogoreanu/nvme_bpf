@@ -10,7 +10,7 @@
 #include "histogram.bpf.h"
 #include "types.bpf.h"
 
-char LICENSE[] SEC("license") = "MIT";
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 #define MAX_LATENCY_ENTRIES 20
 #define ALL_CTRL_ID 0xFFFFFFFF
@@ -46,7 +46,7 @@ struct {
 SEC("tp/nvme/nvme_setup_cmd")
 int handle_nvme_setup_cmd(struct trace_event_raw_nvme_setup_cmd* ctx) {
 #ifdef VLOG
-  bpf_printk("nvme_setup_cmd: PID %d, qid=%d, cid=%d, opcode=0x%x\n",
+  bpf_printk("nvme_setup_cmd: PID %d, qid=%d, cid=%d, opcode=0x%x",
              bpf_get_current_pid_tgid() >> 32, ctx->qid, ctx->cid, ctx->opcode);
 #endif
   if (filter_ctrl_id != ALL_CTRL_ID && ctx->ctrl_id != (int)filter_ctrl_id) {
@@ -109,9 +109,8 @@ int handle_nvme_setup_cmd(struct trace_event_raw_nvme_setup_cmd* ctx) {
 
 SEC("tp/nvme/nvme_complete_rq")
 int handle_nvme_complete_rq(struct trace_event_raw_nvme_complete_rq* ctx) {
-  // bpf_printk("nvme_complete_rq");
 #ifdef VLOG
-  bpf_printk("nvme_complete_rq: PID %d, disk=%s, qid=%d, cid=%d\n",
+  bpf_printk("nvme_complete_rq: PID %d, disk=%s, qid=%d, cid=%d",
              bpf_get_current_pid_tgid() >> 32, ctx->disk, ctx->qid, ctx->cid);
 #endif
 

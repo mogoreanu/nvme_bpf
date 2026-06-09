@@ -48,7 +48,7 @@ Useful flags / settings:
 * --lbs512. If set, the size classes are computed assuming 512 byte logical
   block size. By default 4KiB logical block size is assumed.
 
-bazel build :nvme_latency && sudo bazel-bin/nvme_latency
+bazel build :nvme_latency && sudo $(pwd)/bazel-bin/nvme_latency
 
 # Example usage:
 bazel build :nvme_latency && cp -f bazel-bin/nvme_latency /tmp/nvme_latency && \
@@ -62,6 +62,11 @@ sudo /tmp/nvme_latency   --ctrl_id=3 --split_size --lat_min_us=65
 fio --name=read_lat_1 --thread=1   --ioengine=libaio --size=1200000K \
   --filesize=100% --direct=1 --randrepeat=0 --norandommap=1 \
   --filename=/dev/nvme3n1   --rw=randread --iodepth=1 --bs=4K
+
+# Start with BPF tracing
+bazel build :nvme_latency && sudo $(pwd)/bazel-bin/nvme_latency --bpf_trace
+cat /sys/kernel/tracing/trace_pipe
+
 
 Improvement opportunities:
 * Cleanup old entries in the in-flight command map.
@@ -89,7 +94,7 @@ ABSL_FLAG(int, lat_shift, -1, "");
 
 ABSL_FLAG(bool, split_size, false, "If set splits the histograms by size");
 
-ABSL_FLAG(bool, trace, false,
+ABSL_FLAG(bool, bpf_trace, false,
           "If set will load a program that includes bpf_printk. Requires a "
           "kernel built with CONFIG_TRACING and CONFIG_BPF_EVENTS. To display "
           "the events cat /sys/kernel/debug/tracing/trace_pipe");
@@ -363,7 +368,7 @@ int main(int argc, char** argv) {
   absl::InitializeLog();
 
   absl::Status main_status;
-  if (absl::GetFlag(FLAGS_trace)) {
+  if (absl::GetFlag(FLAGS_bpf_trace)) {
     main_status = RunMain<nvme_latency_vlog_bpf>();
   } else {
     main_status = RunMain<nvme_latency_bpf>();
