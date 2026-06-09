@@ -8,6 +8,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <cstring>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -20,13 +21,15 @@
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/ascii.h"
+#include "absl/strings/escaping.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/strip.h"
 #include "absl/time/time.h"
+#include "nvme_strings.h"
 #include "nvme_trace.skel.h"
 
 /*
-bazel build :nvme_trace && sudo bazel-bin/nvme_trace
+bazel build :nvme_trace && sudo $(pwd)/bazel-bin/nvme_trace
 */
 
 ABSL_DECLARE_FLAG(int, stderrthreshold);
@@ -64,22 +67,46 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char* format,
 }
 
 int HandleNvmeSubmitEvent(const nvme_submit_trace_event& se) {
-  std::cout << std::dec << se.ts_ns << " Submit nvme" << std::dec << se.ctrl_id
-            << ": qid=" << se.qid << ", cid=" << se.cid << ", nsid=" << se.nsid
-            << ", flags=0x" << std::hex << static_cast<int>(se.flags)
-            << ", meta=0x" << std::hex << static_cast<int>(se.metadata)
-            << ", opcode=" << std::dec << static_cast<int>(se.opcode)
-            << std::endl;
+  std::string_view disk(se.disk, strnlen(se.disk, sizeof(se.disk)));
+  if (se.qid == 0) {
+    std::cout << std::dec << se.ts_ns << " " << disk << " Submit nvme"
+              << std::dec << se.ctrl_id << ": qid=" << se.qid
+              << ", cid=" << se.cid << ", nsid=" << se.nsid << ", flags=0x"
+              << std::hex << static_cast<int>(se.flags) << ", meta=0x"
+              << std::hex << static_cast<int>(se.metadata)
+              << ", opcode=" << std::dec << static_cast<int>(se.opcode) << " ("
+              << nvme_abi::NvmeAdminOpcodeToString(
+                     static_cast<nvme_abi::NvmeOpcode>(se.opcode))
+              << ")"
+              << ", cdw10=0x"
+              << absl::BytesToHexString(std::string_view(
+                     reinterpret_cast<const char*>(se.cdw10), sizeof(se.cdw10)))
+              << std::endl;
+  } else {
+    std::cout << std::dec << se.ts_ns << " " << disk << " Submit nvme"
+              << std::dec << se.ctrl_id << ": qid=" << se.qid
+              << ", cid=" << se.cid << ", nsid=" << se.nsid << ", flags=0x"
+              << std::hex << static_cast<int>(se.flags) << ", meta=0x"
+              << std::hex << static_cast<int>(se.metadata)
+              << ", opcode=" << std::dec << static_cast<int>(se.opcode) << " ("
+              << nvme_abi::NvmeIoOpcodeToString(
+                     static_cast<nvme_abi::NvmeOpcode>(se.opcode))
+              << ")" << std::endl;
+    // TODO(mogo): cdw10 seems to be populated with garbage.
+    // << ", cdw10=0x" << absl::BytesToHexString(std::string_view(
+    //        reinterpret_cast<const char*>(se.cdw10), sizeof(se.cdw10)))
+  }
   return 0;
 }
 
 int HandleNvmeCompleteEvent(const nvme_complete_trace_event& ce) {
-  std::cout << std::dec << ce.ts_ns << " Complete nvme" << std::dec
-            << ce.ctrl_id << ": qid=" << ce.qid << ", cid=" << ce.cid
-            << ", res=0x" << std::hex << ce.result << ", retries=" << std::dec
-            << static_cast<int>(ce.retries) << ", flags=0x" << std::hex
-            << static_cast<int>(ce.flags) << ", status=0x" << std::hex
-            << ce.status << std::endl;
+  std::string_view disk(ce.disk, strnlen(ce.disk, sizeof(ce.disk)));
+  std::cout << std::dec << ce.ts_ns << " " << disk << " Complete nvme"
+            << std::dec << ce.ctrl_id << ": qid=" << ce.qid
+            << ", cid=" << ce.cid << ", res=0x" << std::hex << ce.result
+            << ", retries=" << std::dec << static_cast<int>(ce.retries)
+            << ", flags=0x" << std::hex << static_cast<int>(ce.flags)
+            << ", status=0x" << std::hex << ce.status << std::endl;
   return 0;
 }
 
@@ -112,7 +139,7 @@ int HandleNvmeEvent(void* ctx, void* data, size_t data_sz) {
 }
 
 absl::Status RunMain() {
-  struct ring_buffer* nvme_trace_events = NULL;
+  struct ring_buffer* nvme_trace_events;
   struct nvme_trace_bpf* skel;
   int err;
 
@@ -121,7 +148,8 @@ absl::Status RunMain() {
   signal(SIGINT, sig_handler);
   signal(SIGTERM, sig_handler);
 
-  skel = nvme_trace_bpf::open();
+  LIBBPF_OPTS(bpf_object_open_opts, open_opts, .kernel_log_level = 2, );
+  skel = nvme_trace_bpf::open(&open_opts);
   if (skel == nullptr) {
     return absl::InternalError("Failed to open and load BPF skeleton");
   }
@@ -133,8 +161,37 @@ absl::Status RunMain() {
     skel->rodata->filter_ctrl_id = filter_ctrl_id;
   }
 
+  size_t log_buf_sz = 1024 * 1024;
+  char* setup_log_buf = (char*)malloc(log_buf_sz);
+  char* complete_log_buf = (char*)malloc(log_buf_sz);
+  if (setup_log_buf) {
+    setup_log_buf[0] = '\0';
+    bpf_program__set_log_buf(skel->progs.handle_nvme_setup_cmd, setup_log_buf,
+                             log_buf_sz);
+    bpf_program__set_log_level(skel->progs.handle_nvme_setup_cmd, 1);
+  }
+  if (complete_log_buf) {
+    complete_log_buf[0] = '\0';
+    bpf_program__set_log_buf(skel->progs.handle_nvme_complete_rq,
+                             complete_log_buf, log_buf_sz);
+    bpf_program__set_log_level(skel->progs.handle_nvme_complete_rq, 1);
+  }
+  auto free_logs_cleanup =
+      absl::MakeCleanup([setup_log_buf, complete_log_buf]() {
+        free(setup_log_buf);
+        free(complete_log_buf);
+      });
+
   err = nvme_trace_bpf::load(skel);
   if (err) {
+    if (setup_log_buf && setup_log_buf[0]) {
+      std::cerr << "Verifier log for handle_nvme_setup_cmd:\n"
+                << setup_log_buf << std::endl;
+    }
+    if (complete_log_buf && complete_log_buf[0]) {
+      std::cerr << "Verifier log for handle_nvme_complete_rq:\n"
+                << complete_log_buf << std::endl;
+    }
     return absl::InternalError(
         absl::StrCat("Failed to load and verify BPF skeleton, err=", err));
   }

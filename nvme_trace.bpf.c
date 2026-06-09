@@ -9,7 +9,7 @@ typedef _Bool bool;
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 
-char LICENSE[] SEC("license") = "MIT";
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 #define ALL_CTRL_ID 0xFFFFFFFF
 const volatile __u32 filter_ctrl_id = ALL_CTRL_ID;
@@ -32,7 +32,7 @@ int handle_nvme_setup_cmd(struct trace_event_raw_nvme_setup_cmd* ctx) {
   if (!e) return 0;
 
   e->action = kActionTypeSubmit;
-	e->ts_ns = bpf_ktime_get_ns();
+  e->ts_ns = bpf_ktime_get_ns();
   e->ctrl_id = ctx->ctrl_id;
   e->qid = ctx->qid;
   e->opcode = ctx->opcode;
@@ -41,9 +41,10 @@ int handle_nvme_setup_cmd(struct trace_event_raw_nvme_setup_cmd* ctx) {
   e->nsid = ctx->nsid;
   e->metadata = ctx->metadata;
   e->fctype = ctx->fctype;
-  // Copying string doesn't quite work yet.
-  // bpf_probe_read_str(e->disk, sizeof(e->disk), ctx->disk);
-  // bpf_probe_read(e->cdw10, sizeof(ctx->cdw10), ctx->cdw10);
+  bpf_probe_read_kernel_str(e->disk, sizeof(e->disk), ctx->disk);
+  int cdw_size = sizeof(e->cdw10);
+  if (sizeof(ctx->cdw10) < cdw_size) { cdw_size = sizeof(ctx->cdw10); }
+  bpf_probe_read_kernel(e->cdw10, cdw_size, ctx->cdw10);
 
   bpf_ringbuf_submit(e, 0);
   return 0;
@@ -62,8 +63,8 @@ int handle_nvme_complete_rq(struct trace_event_raw_nvme_complete_rq* ctx) {
   if (!e) return 0;
 
   e->action = kActionTypeComplete;
-	e->ts_ns = bpf_ktime_get_ns();
-  // bpf_probe_read_str(e->disk, sizeof(e->disk), ctx->disk);
+  e->ts_ns = bpf_ktime_get_ns();
+  bpf_probe_read_kernel_str(e->disk, sizeof(e->disk), ctx->disk);
   e->ctrl_id = ctx->ctrl_id;
   e->qid = ctx->qid;
   e->cid = ctx->cid;

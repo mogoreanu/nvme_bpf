@@ -121,8 +121,8 @@ cc_library(
     name = "nvme_strings",
     srcs = ["nvme_strings.cc"],
     hdrs = ["nvme_strings.h"],
-    cxxopts = ["-std=c++20"],
     copts = ["-Wno-packed-bitfield-compat"],
+    cxxopts = ["-std=c++20"],
     deps = [":nvme_abi"],
 )
 
@@ -237,6 +237,7 @@ cc_binary(
         "nvme_trace.h",
         ":nvme_trace_skel_h",
     ],
+    cxxopts = ["-std=c++20"],
     # Link against system libraries required by libbpf (elf, zlib)
     linkopts = [
         "-lelf",
@@ -244,6 +245,7 @@ cc_binary(
     ],
     deps = [
         ":libbpf",
+        ":nvme_strings",
         ":types_bpf",
         "@abseil-cpp//absl/cleanup",
         "@abseil-cpp//absl/flags:flag",
@@ -304,8 +306,8 @@ cc_binary(
         ":nvme_latency_bpf_skel_h",
         ":nvme_latency_vlog_bpf_skel_h",
     ],
-    cxxopts = ["-std=c++20"],
     copts = ["-Wno-packed-bitfield-compat"],
+    cxxopts = ["-std=c++20"],
     # Link against system libraries required by libbpf (elf, zlib)
     linkopts = [
         "-lelf",
