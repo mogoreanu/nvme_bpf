@@ -149,6 +149,19 @@ cc_library(
     deps = [":types_bpf"],
 )
 
+cc_test(
+    name = "bits_bpf_test",
+    srcs = [
+        "bits_bpf_test.cc",
+    ],
+    deps = [
+        ":bits_bpf",
+        "@abseil-cpp//absl/log",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
 cc_library(
     name = "histogram_bpf",
     hdrs = [
@@ -313,18 +326,5 @@ cc_binary(
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/time",
-    ],
-)
-
-cc_test(
-    name = "bits_bpf_test",
-    srcs = [
-        "bits_bpf_test.cc",
-    ],
-    deps = [
-        ":bits_bpf",
-        "@abseil-cpp//absl/log",
-        "@googletest//:gtest",
-        "@googletest//:gtest_main",
     ],
 )

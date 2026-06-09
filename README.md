@@ -42,7 +42,7 @@ bazel build :nvme_trace
 ```
 
 ```shell
-sudo bazel-bin/nvme_trace
+sudo $(pwd)/bazel-bin/nvme_trace
 ```
 
 ## nvme_latency
@@ -55,7 +55,7 @@ bazel build :nvme_latency
 ```
 
 ```shell
-sudo bazel-bin/nvme_latency
+sudo $(pwd)/bazel-bin/nvme_latency
 ```
 
 Useful flags
