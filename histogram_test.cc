@@ -72,60 +72,60 @@ TEST(BpfHistogram, BucketToValue) {
   // v >= min                   && v < min + 2 ^ shift       => returns 64
   // v >= min + 2 ^ shift       && v < min + 2 ^ (shift + 1) => returns 63
   // v >= min + 2 ^ (shift + 1) && v < min + 2 ^ (shift + 2) => returns 62
-  ASSERT_EQ(bpf_bucket_low(0, /*min=*/0, /*shift=*/0, /*max_slots=*/13), 0);
-  ASSERT_EQ(bpf_bucket_high(0, /*min=*/0, /*shift=*/0, /*max_slots=*/13), 1);
+  ASSERT_EQ(bpf_bucket_low(0, /*min=*/0, /*shift=*/0, /*max_slots=*/13), 0ULL);
+  ASSERT_EQ(bpf_bucket_high(0, /*min=*/0, /*shift=*/0, /*max_slots=*/13), 1ULL);
 
-  ASSERT_EQ(bpf_bucket_low(1, /*min=*/0, /*shift=*/0, /*max_slots=*/13), 1);
-  ASSERT_EQ(bpf_bucket_high(1, /*min=*/0, /*shift=*/0, /*max_slots=*/13), 2);
+  ASSERT_EQ(bpf_bucket_low(1, /*min=*/0, /*shift=*/0, /*max_slots=*/13), 1ULL);
+  ASSERT_EQ(bpf_bucket_high(1, /*min=*/0, /*shift=*/0, /*max_slots=*/13), 2ULL);
 
-  ASSERT_EQ(bpf_bucket_low(2, /*min=*/0, /*shift=*/0, /*max_slots=*/13), 2);
-  ASSERT_EQ(bpf_bucket_high(2, /*min=*/0, /*shift=*/0, /*max_slots=*/13), 4);
+  ASSERT_EQ(bpf_bucket_low(2, /*min=*/0, /*shift=*/0, /*max_slots=*/13), 2ULL);
+  ASSERT_EQ(bpf_bucket_high(2, /*min=*/0, /*shift=*/0, /*max_slots=*/13), 4ULL);
 
-  ASSERT_EQ(bpf_bucket_low(3, /*min=*/0, /*shift=*/0, /*max_slots=*/13), 4);
-  ASSERT_EQ(bpf_bucket_high(3, /*min=*/0, /*shift=*/0, /*max_slots=*/13), 8);
+  ASSERT_EQ(bpf_bucket_low(3, /*min=*/0, /*shift=*/0, /*max_slots=*/13), 4ULL);
+  ASSERT_EQ(bpf_bucket_high(3, /*min=*/0, /*shift=*/0, /*max_slots=*/13), 8ULL);
 
   // Min = 10
-  ASSERT_EQ(bpf_bucket_low(13, /*min=*/10, /*shift=*/0, /*max_slots=*/13), 0);
-  ASSERT_EQ(bpf_bucket_high(13, /*min=*/10, /*shift=*/0, /*max_slots=*/13), 10);
+  ASSERT_EQ(bpf_bucket_low(13, /*min=*/10, /*shift=*/0, /*max_slots=*/13), 0ULL);
+  ASSERT_EQ(bpf_bucket_high(13, /*min=*/10, /*shift=*/0, /*max_slots=*/13), 10ULL);
 
-  ASSERT_EQ(bpf_bucket_low(0, /*min=*/10, /*shift=*/0, /*max_slots=*/13), 10);
-  ASSERT_EQ(bpf_bucket_high(0, /*min=*/10, /*shift=*/0, /*max_slots=*/13), 11);
+  ASSERT_EQ(bpf_bucket_low(0, /*min=*/10, /*shift=*/0, /*max_slots=*/13), 10ULL);
+  ASSERT_EQ(bpf_bucket_high(0, /*min=*/10, /*shift=*/0, /*max_slots=*/13), 11ULL);
 
-  ASSERT_EQ(bpf_bucket_low(1, /*min=*/10, /*shift=*/0, /*max_slots=*/13), 11);
-  ASSERT_EQ(bpf_bucket_high(1, /*min=*/10, /*shift=*/0, /*max_slots=*/13), 12);
+  ASSERT_EQ(bpf_bucket_low(1, /*min=*/10, /*shift=*/0, /*max_slots=*/13), 11ULL);
+  ASSERT_EQ(bpf_bucket_high(1, /*min=*/10, /*shift=*/0, /*max_slots=*/13), 12ULL);
 
-  ASSERT_EQ(bpf_bucket_low(2, /*min=*/10, /*shift=*/0, /*max_slots=*/13), 12);
-  ASSERT_EQ(bpf_bucket_high(2, /*min=*/10, /*shift=*/0, /*max_slots=*/13), 14);
+  ASSERT_EQ(bpf_bucket_low(2, /*min=*/10, /*shift=*/0, /*max_slots=*/13), 12ULL);
+  ASSERT_EQ(bpf_bucket_high(2, /*min=*/10, /*shift=*/0, /*max_slots=*/13), 14ULL);
 
-  ASSERT_EQ(bpf_bucket_low(3, /*min=*/10, /*shift=*/0, /*max_slots=*/13), 14);
-  ASSERT_EQ(bpf_bucket_high(3, /*min=*/10, /*shift=*/0, /*max_slots=*/13), 18);
+  ASSERT_EQ(bpf_bucket_low(3, /*min=*/10, /*shift=*/0, /*max_slots=*/13), 14ULL);
+  ASSERT_EQ(bpf_bucket_high(3, /*min=*/10, /*shift=*/0, /*max_slots=*/13), 18ULL);
 
   // Min = 10, shift=2
-  ASSERT_EQ(bpf_bucket_low(13, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 0);
-  ASSERT_EQ(bpf_bucket_high(13, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 10);
+  ASSERT_EQ(bpf_bucket_low(13, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 0ULL);
+  ASSERT_EQ(bpf_bucket_high(13, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 10ULL);
 
-  ASSERT_EQ(bpf_bucket_low(0, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 10);
-  ASSERT_EQ(bpf_bucket_high(0, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 14);
+  ASSERT_EQ(bpf_bucket_low(0, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 10ULL);
+  ASSERT_EQ(bpf_bucket_high(0, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 14ULL);
 
-  ASSERT_EQ(bpf_bucket_low(1, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 14);
-  ASSERT_EQ(bpf_bucket_high(1, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 18);
+  ASSERT_EQ(bpf_bucket_low(1, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 14ULL);
+  ASSERT_EQ(bpf_bucket_high(1, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 18ULL);
 
-  ASSERT_EQ(bpf_bucket_low(2, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 18);
-  ASSERT_EQ(bpf_bucket_high(2, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 26);
+  ASSERT_EQ(bpf_bucket_low(2, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 18ULL);
+  ASSERT_EQ(bpf_bucket_high(2, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 26ULL);
 
-  ASSERT_EQ(bpf_bucket_low(3, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 26);
-  ASSERT_EQ(bpf_bucket_high(3, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 42);
+  ASSERT_EQ(bpf_bucket_low(3, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 26ULL);
+  ASSERT_EQ(bpf_bucket_high(3, /*min=*/10, /*shift=*/2, /*max_slots=*/13), 42ULL);
 }
 
 TEST(Log2, HistogramHelperTest) {
-  int64_t lat_min_us = 10;
+  uint64_t lat_min_us = 10;
   int lat_shift = 2;
   int max_slots = 13;
 
   std::random_device rd;
   std::mt19937 gen(rd());
 
-  int64_t max_histogram_value = lat_min_us + (1 << (lat_shift + max_slots - 1));
+  uint64_t max_histogram_value = lat_min_us + (1 << (lat_shift + max_slots - 1));
   std::uniform_int_distribution<uint64_t> d(0, max_histogram_value + 1000);
 
   absl::Time end = absl::Now() + absl::Seconds(1);
@@ -158,8 +158,8 @@ TEST(Log2, HistogramHelperTest) {
                          << " max_slots=" << max_slots;
     }
 
-    ASSERT_EQ(bpf_log_bucket_low(0), 0);
-    ASSERT_EQ(bpf_log_bucket_high(0), 1);
+    ASSERT_EQ(bpf_log_bucket_low(0), 0ULL);
+    ASSERT_EQ(bpf_log_bucket_high(0), 1ULL);
 
   } while (absl::Now() < end || --count > 0);
 }
