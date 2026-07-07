@@ -18,6 +18,16 @@ the examples, package names may vary across distros.
 sudo apt install git clang g++ libelf1 libelf-dev zlib1g-dev libssl-dev sudo
 ```
 
+This project requires the `nvme_core` BTF information that should be here:
+`/sys/kernel/btf/nvme_core`. If this file is not available it will fall back to
+`/sys/kernel/btf/vmlinux`. If they are not available the compilation will fail.
+
+To enable the kernel to export this information ensure the kernel config has the following:
+```bash
+cat /boot/config-$(uname -r) | grep CONFIG_DEBUG_INFO_BTF
+CONFIG_DEBUG_INFO_BTF=y
+```
+
 ## Getting the source code
 
 Download the git repository and check out submodules:
