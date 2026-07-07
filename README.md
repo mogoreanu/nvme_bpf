@@ -8,14 +8,14 @@ version that may be required for some of the example invocations.
 ```bash
 wget 'https://github.com/bazelbuild/bazelisk/releases/download/v1.27.0/bazelisk-linux-amd64'
 chmod +x bazelisk-linux-amd64
-mv bazelisk-linux-amd64 /usr/bin/bazel
+sudo mv bazelisk-linux-amd64 /usr/bin/bazel
 ```
 
 You will need `clang` (at least v11 or later), `libelf` and `zlib` to build
 the examples, package names may vary across distros.
 
 ```shell
-apt install git clang g++ libelf1 libelf-dev zlib1g-dev libssl-dev sudo
+sudo apt install git clang g++ libelf1 libelf-dev zlib1g-dev libssl-dev sudo
 ```
 
 ## Getting the source code
