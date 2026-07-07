@@ -15,7 +15,7 @@ You will need `clang` (at least v11 or later), `libelf` and `zlib` to build
 the examples, package names may vary across distros.
 
 ```shell
-sudo apt install git clang g++ libelf1 libelf-dev zlib1g-dev libssl-dev sudo
+sudo apt install -y git clang g++ libelf1 libelf-dev zlib1g-dev libssl-dev sudo
 ```
 
 This project requires the `nvme_core` BTF information that should be here:
