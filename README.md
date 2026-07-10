@@ -6,7 +6,7 @@ Tools to debug and monitor linux NVMe activity using BPF / eBPF tracepoints / kp
 Install bazel using the bazelisk binary, it will provide a more up-to-date 
 version that may be required for some of the example invocations.
 ```bash
-wget 'https://github.com/bazelbuild/bazelisk/releases/download/v1.27.0/bazelisk-linux-amd64'
+wget 'https://github.com/bazelbuild/bazelisk/releases/download/v1.29.0/bazelisk-linux-amd64'
 chmod +x bazelisk-linux-amd64
 sudo mv bazelisk-linux-amd64 /usr/bin/bazel
 ```
