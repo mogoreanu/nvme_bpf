@@ -61,7 +61,7 @@ The `nvme_latency` binary accumulates latency histograms per controller and
 opcode and displays them periodically in the shell.
 
 ```shell
-bazel build :nvme_latency
+bazel build -c opt :nvme_latency
 ```
 
 ```shell
