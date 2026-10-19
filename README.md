@@ -58,14 +58,15 @@ sudo $(pwd)/bazel-bin/nvme_trace
 ## nvme_latency
 
 The `nvme_latency` binary accumulates latency histograms per controller and 
-opcode and displays them periodically in the shell.
+opcode and displays them periodically in the shell. Its sources, the BPF
+program and the web dashboard live in the `nvme_latency` directory.
 
 ```shell
-bazel build -c opt :nvme_latency
+bazel build -c opt //nvme_latency
 ```
 
 ```shell
-sudo $(pwd)/bazel-bin/nvme_latency
+sudo $(pwd)/bazel-bin/nvme_latency/nvme_latency
 ```
 
 Useful flags
@@ -78,6 +79,57 @@ the granularity of the data around the interesting latency.
 * `--lat_shift` - specifies the size of the first bucket. With the default 
 `--lat_shift` of zero the first bucket is 1us. Increasing the shift reduces the
 number of buckets necessary to hold the entire interesting range.
+* `--print=full|summary|none` - prints the full histograms (default), one line
+per controller and opcode with the IOPS and percentiles of the last interval,
+or nothing.
+* `--snapshot_path` - where the histograms are exported for `nvme_latency_web`
+(default `/run/nvme_latency/snapshot`, a world readable file replaced
+atomically every interval). `--snapshot_path=` disables the export.
+
+## nvme_latency_web
+
+The `nvme_latency_web` binary serves a live web dashboard of the histograms
+collected by `nvme_latency`: for every controller and request type it plots the
+P50 / P90 / P99 / P99.9 latency and the request rate over time, plus the latency
+distribution.
+
+The work is split between two processes so that the web server never runs with
+privileges:
+* `nvme_latency` runs as root, owns the BPF program and exports snapshots of
+the histograms to a file. It only writes the file: it does not parse any input
+or listen on any socket.
+* `nvme_latency_web` runs as a regular user (it refuses to run as root), reads
+the snapshots and serves the dashboard. It does not link libbpf.
+
+```shell
+bazel build -c opt //nvme_latency //nvme_latency:nvme_latency_web
+sudo $(pwd)/bazel-bin/nvme_latency/nvme_latency --print=summary  # One terminal.
+$(pwd)/bazel-bin/nvme_latency/nvme_latency_web --port=8080       # Another one.
+```
+
+Then open http://localhost:8080/. The server only listens on localhost by
+default; to view it from another machine use an ssh tunnel
+(`ssh -L 8080:localhost:8080 <host>`) or pass `--http_address=0.0.0.0`.
+The collection settings (filters, buckets, `--split_size`) are set on
+`nvme_latency`, the dashboard follows them and survives collector restarts.
+
+Percentiles are computed by merging the per-second delta histograms of each
+time bucket (not by averaging percentiles), so they are accurate to the
+histogram bucket resolution for every zoom level.
+
+Useful flags
+* `--snapshot_path` - the snapshot file written by `nvme_latency`.
+* `--fake` - serves simulated data, no collector needed. Useful to try the UI
+or work on it. (`nvme_latency --fake --snapshot_path=/tmp/x/snapshot` also
+simulates the collector without root.)
+* `--history_s` - how much history is kept in memory (default 1h).
+* `--web_root=$(pwd)/nvme_latency/web` - serves the UI files from the source
+tree instead of the copies embedded in the binary, so UI changes only need a
+browser reload.
+
+The JSON API used by the UI can also be queried directly:
+`/api/config` (bucket boundaries, settings) and
+`/api/series?window_s=300&max_points=600` (time series and histograms).
 
 ## Tracepoints
 

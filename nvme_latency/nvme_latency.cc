@@ -57,13 +57,13 @@ sudo $(pwd)/bazel-bin/nvme_latency/nvme_latency
 
 # Example usage:
 bazel build //nvme_latency && \
-cp -f bazel-bin/nvme_latency/nvme_latency /tmp/nvme_latency && \
-sudo /tmp/nvme_latency --ctrl_id=0 --split_size --lat_min_us=65
+sudo $(pwd)/bazel-bin/nvme_latency/nvme_latency --ctrl_id=0 --split_size \
+  --lat_min_us=65
 
 # Home nvme3
 bazel build //nvme_latency && \
-cp -f bazel-bin/nvme_latency/nvme_latency /tmp/nvme_latency && \
-sudo /tmp/nvme_latency   --ctrl_id=3 --split_size --lat_min_us=65
+sudo $(pwd)/bazel-bin/nvme_latency/nvme_latency --ctrl_id=3 --split_size \
+  --lat_min_us=65
 
 # Home generate 300000 IO.
 fio --name=read_lat_1 --thread=1   --ioengine=libaio --size=1200000K \

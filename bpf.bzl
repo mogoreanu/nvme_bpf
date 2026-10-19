@@ -11,7 +11,7 @@ def bpf_program(name, src, bpf_object, hdrs = [], clang_args = "", **kwargs):
         cmd = """
             # Create a 'bpf' directory and copy libbpf headers there to satisfy <bpf/bpf_helpers.h>
             mkdir -p bpf
-            for h in $(locations :libbpf_headers); do
+            for h in $(locations //:libbpf_headers); do
                 cp "$$h" bpf/
             done
             
@@ -20,7 +20,7 @@ def bpf_program(name, src, bpf_object, hdrs = [], clang_args = "", **kwargs):
             # Copy uapi headers. We filter for linux/ headers to avoid directory structure issues if glob returns more.
             # Assuming structure is include/uapi/linux/*.h in the source.
             # Flattening might be an issue if not careful, but here we just need 'linux/' prefix.
-            for h in $(locations :libbpf_uapi_headers_files); do
+            for h in $(locations //:libbpf_uapi_headers_files); do
                 # Check if it is a linux header
                 if [[ "$$h" == *"linux/"* ]]; then
                     cp "$$h" linux/

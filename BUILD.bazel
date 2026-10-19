@@ -2,6 +2,16 @@ load("@rules_cc//cc:cc_test.bzl", "cc_test")
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 load("bpf.bzl", "bpf_program", "bpf_skel")
 
+# Shared libraries and BPF headers are used by the tools in subdirectories,
+# e.g. //nvme_latency.
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "bits.bpf.h",
+    "histogram.bpf.h",
+    "types.bpf.h",
+])
+
 cc_binary(
     name = "my_hello",
     srcs = ["my_hello.cc"],
@@ -271,78 +281,6 @@ cc_binary(
         ":libbpf",
         ":nvme_strings",
         ":types_bpf",
-        "@abseil-cpp//absl/cleanup",
-        "@abseil-cpp//absl/flags:flag",
-        "@abseil-cpp//absl/flags:parse",
-        "@abseil-cpp//absl/log",
-        "@abseil-cpp//absl/log:flags",
-        "@abseil-cpp//absl/log:initialize",
-        "@abseil-cpp//absl/status",
-        "@abseil-cpp//absl/strings",
-        "@abseil-cpp//absl/time",
-    ],
-)
-
-bpf_program(
-    name = "nvme_latency_bpf_o",
-    src = "nvme_latency.bpf.c",
-    hdrs = [
-        "bits.bpf.h",
-        "histogram.bpf.h",
-        "nvme_core_gen.h",
-        "nvme_latency.h",
-        "types.bpf.h",
-    ],
-    bpf_object = "nvme_latency.bpf.o",
-)
-
-bpf_skel(
-    name = "nvme_latency_bpf_skel_h",
-    bpf_object = ":nvme_latency_bpf_o",
-    skel_header = "nvme_latency_bpf.skel.h",
-)
-
-bpf_program(
-    name = "nvme_latency_vlog_bpf_o",
-    src = "nvme_latency.bpf.c",
-    hdrs = [
-        "bits.bpf.h",
-        "histogram.bpf.h",
-        "nvme_core_gen.h",
-        "nvme_latency.h",
-        "types.bpf.h",
-    ],
-    bpf_object = "nvme_latency_vlog.bpf.o",
-    clang_args = "-DVLOG",
-)
-
-bpf_skel(
-    name = "nvme_latency_vlog_bpf_skel_h",
-    bpf_object = ":nvme_latency_vlog_bpf_o",
-    skel_header = "nvme_latency_vlog_bpf.skel.h",
-)
-
-cc_binary(
-    name = "nvme_latency",
-    srcs = [
-        "nvme_latency.cc",
-        "nvme_latency.h",
-        ":nvme_latency_bpf_skel_h",
-        ":nvme_latency_vlog_bpf_skel_h",
-    ],
-    copts = ["-Wno-packed-bitfield-compat"],
-    cxxopts = ["-std=c++20"],
-    # Link against system libraries required by libbpf (elf, zlib)
-    linkopts = [
-        "-lelf",
-        "-lz",
-    ],
-    deps = [
-        ":histogram",
-        ":histogram_bpf",
-        ":libbpf",
-        ":nvme_abi",
-        ":nvme_strings",
         "@abseil-cpp//absl/cleanup",
         "@abseil-cpp//absl/flags:flag",
         "@abseil-cpp//absl/flags:parse",
