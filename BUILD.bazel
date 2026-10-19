@@ -59,6 +59,10 @@ cc_library(
         "-Wno-compare-distinct-pointer-types",
         "-Wno-unused-parameter",
         "-Wno-missing-field-initializers",
+        # Newer glibc makes strstr/strchr return const pointers for const
+        # inputs, which older libbpf assigns to non-const pointers.
+        # Remove once `bpftool` updates `libbpf' to v1.8.0
+        "-Wno-discarded-qualifiers",
     ],
     include_prefix = "bpf",
     includes = [
