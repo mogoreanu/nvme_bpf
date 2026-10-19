@@ -42,6 +42,11 @@ submodules using this command:
 git submodule update --init --recursive
 ```
 
+To update `libbpf` to the latest version of the code:
+```shell
+git -C bpftool submodule update --remote libbpf
+```
+
 ## nvme_trace
 
 The `nvme_trace` binary intercepts each NVMe SQE and CQE and prints a log entry
