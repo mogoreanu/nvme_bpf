@@ -2,7 +2,7 @@
 #include "nvme_core_gen.h"
 // clang-format on
 
-#include "nvme_latency.h"
+#include "nvme_latency/nvme_latency.h"
 
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>

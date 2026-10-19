@@ -1,0 +1,309 @@
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+load("//:bpf.bzl", "bpf_program", "bpf_skel")
+
+# nvme_latency: NVMe latency histograms collected with a BPF program (run as
+# root), and nvme_latency_web: a live web dashboard for them (run as a regular
+# user). See the README.
+
+bpf_program(
+    name = "nvme_latency_bpf_o",
+    src = "nvme_latency.bpf.c",
+    hdrs = [
+        "//:bits.bpf.h",
+        "//:histogram.bpf.h",
+        "//:nvme_core_gen.h",
+        "nvme_latency.h",
+        "//:types.bpf.h",
+    ],
+    bpf_object = "nvme_latency.bpf.o",
+)
+
+bpf_skel(
+    name = "nvme_latency_bpf_skel_h",
+    bpf_object = ":nvme_latency_bpf_o",
+    skel_header = "nvme_latency_bpf.skel.h",
+)
+
+bpf_program(
+    name = "nvme_latency_vlog_bpf_o",
+    src = "nvme_latency.bpf.c",
+    hdrs = [
+        "//:bits.bpf.h",
+        "//:histogram.bpf.h",
+        "//:nvme_core_gen.h",
+        "nvme_latency.h",
+        "//:types.bpf.h",
+    ],
+    bpf_object = "nvme_latency_vlog.bpf.o",
+    clang_args = "-DVLOG",
+)
+
+bpf_skel(
+    name = "nvme_latency_vlog_bpf_skel_h",
+    bpf_object = ":nvme_latency_vlog_bpf_o",
+    skel_header = "nvme_latency_vlog_bpf.skel.h",
+)
+
+cc_binary(
+    name = "nvme_latency",
+    srcs = ["nvme_latency.cc"],
+    cxxopts = ["-std=c++20"],
+    # Link against system libraries required by libbpf (elf, zlib)
+    linkopts = [
+        "-lelf",
+        "-lz",
+    ],
+    deps = [
+        ":bpf_latency_source",
+        ":fake_latency_source",
+        "//:histogram",
+        ":latency_json",
+        ":latency_source",
+        ":latency_store",
+        ":snapshot_file",
+        "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/flags:parse",
+        "@abseil-cpp//absl/flags:usage",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:flags",
+        "@abseil-cpp//absl/log:initialize",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:str_format",
+        "@abseil-cpp//absl/time",
+    ],
+)
+
+cc_library(
+    name = "nvme_latency_hdr",
+    hdrs = ["nvme_latency.h"],
+    deps = ["//:types_bpf"],
+)
+
+cc_library(
+    name = "latency_source",
+    hdrs = ["latency_source.h"],
+    cxxopts = ["-std=c++20"],
+    deps = [
+        ":nvme_latency_hdr",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/time",
+    ],
+)
+
+cc_library(
+    name = "latency_store",
+    srcs = ["latency_store.cc"],
+    hdrs = ["latency_store.h"],
+    cxxopts = ["-std=c++20"],
+    deps = [
+        "//:histogram_bpf",
+        ":latency_source",
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/container:btree",
+        "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/time",
+    ],
+)
+
+cc_test(
+    name = "latency_store_test",
+    srcs = ["latency_store_test.cc"],
+    cxxopts = ["-std=c++20"],
+    deps = [
+        ":latency_source",
+        ":latency_store",
+        "@abseil-cpp//absl/time",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "latency_json",
+    srcs = ["latency_json.cc"],
+    hdrs = ["latency_json.h"],
+    copts = ["-Wno-packed-bitfield-compat"],
+    cxxopts = ["-std=c++20"],
+    deps = [
+        ":latency_source",
+        ":latency_store",
+        "//:nvme_abi",
+        "//:nvme_strings",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:str_format",
+    ],
+)
+
+cc_library(
+    name = "fake_latency_source",
+    srcs = ["fake_latency_source.cc"],
+    hdrs = ["fake_latency_source.h"],
+    copts = ["-Wno-packed-bitfield-compat"],
+    cxxopts = ["-std=c++20"],
+    deps = [
+        "//:histogram_bpf",
+        ":latency_source",
+        "//:nvme_abi",
+        "@abseil-cpp//absl/container:btree",
+        "@abseil-cpp//absl/random:distributions",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/time",
+    ],
+)
+
+cc_test(
+    name = "latency_json_test",
+    srcs = ["latency_json_test.cc"],
+    cxxopts = ["-std=c++20"],
+    deps = [
+        ":fake_latency_source",
+        ":latency_json",
+        ":latency_source",
+        ":latency_store",
+        "@abseil-cpp//absl/time",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "bpf_latency_source",
+    srcs = [
+        "bpf_latency_source.cc",
+        ":nvme_latency_bpf_skel_h",
+        ":nvme_latency_vlog_bpf_skel_h",
+    ],
+    hdrs = ["bpf_latency_source.h"],
+    cxxopts = ["-std=c++20"],
+    deps = [
+        ":latency_source",
+        "//:libbpf",
+        ":nvme_latency_hdr",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:globals",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
+    ],
+)
+
+cc_library(
+    name = "http_server",
+    srcs = ["http_server.cc"],
+    hdrs = ["http_server.h"],
+    cxxopts = ["-std=c++20"],
+    deps = [
+        "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/cleanup",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/synchronization",
+    ],
+)
+
+cc_test(
+    name = "http_server_test",
+    srcs = ["http_server_test.cc"],
+    cxxopts = ["-std=c++20"],
+    deps = [
+        ":http_server",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+WEB_ASSETS = [
+    "web/index.html",
+    "web/app.css",
+    "web/app.js",
+]
+
+filegroup(
+    name = "web_files",
+    srcs = WEB_ASSETS,
+)
+
+genrule(
+    name = "web_assets_cc",
+    srcs = WEB_ASSETS,
+    outs = ["web_assets.cc"],
+    cmd = "$(location embed_web_assets.sh) $@ $(SRCS)",
+    tools = ["embed_web_assets.sh"],
+)
+
+cc_library(
+    name = "web_assets",
+    srcs = [":web_assets_cc"],
+    hdrs = ["web_assets.h"],
+    deps = [
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/types:span",
+    ],
+)
+
+cc_library(
+    name = "snapshot_file",
+    srcs = ["snapshot_file.cc"],
+    hdrs = ["snapshot_file.h"],
+    cxxopts = ["-std=c++20"],
+    deps = [
+        ":latency_source",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
+    ],
+)
+
+cc_test(
+    name = "snapshot_file_test",
+    srcs = ["snapshot_file_test.cc"],
+    cxxopts = ["-std=c++20"],
+    deps = [
+        ":latency_source",
+        ":snapshot_file",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# The dashboard runs as a regular user: it does not link libbpf, it reads the
+# snapshots exported by the privileged `nvme_latency` collector.
+cc_binary(
+    name = "nvme_latency_web",
+    srcs = ["nvme_latency_web.cc"],
+    cxxopts = ["-std=c++20"],
+    deps = [
+        ":fake_latency_source",
+        ":http_server",
+        ":latency_json",
+        ":latency_source",
+        ":latency_store",
+        ":snapshot_file",
+        ":web_assets",
+        "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/flags:parse",
+        "@abseil-cpp//absl/flags:usage",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:flags",
+        "@abseil-cpp//absl/log:initialize",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/synchronization",
+        "@abseil-cpp//absl/time",
+    ],
+)
