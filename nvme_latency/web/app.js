@@ -47,6 +47,7 @@ const state = {
   data: null,
   windowS: store.get('windowS', 300),
   histMode: store.get('histMode', 'window'),
+  ctrlPct: store.get('ctrlPct', 'p99'),  // Percentile compared on device pages.
   hidden: new Set(store.get('hidden', ['avg'])),
   paused: false,
   route: parseRoute(),
@@ -105,9 +106,13 @@ function lastValid(values) {
   return -1;
 }
 
+// Routes: #/ (all devices), #/c/<ctrl_id> (one device), #/s/<series id>.
 function parseRoute() {
-  const m = /^#\/s\/([\w-]+)/.exec(location.hash);
-  return m ? {view: 'series', id: m[1]} : {view: 'summary'};
+  let m = /^#\/s\/([\w-]+)/.exec(location.hash);
+  if (m) return {view: 'series', id: m[1]};
+  m = /^#\/c\/(\d+)/.exec(location.hash);
+  if (m) return {view: 'ctrl', ctrl: Number(m[1])};
+  return {view: 'summary'};
 }
 
 // ---------------------------------------------------------------------------
@@ -140,6 +145,15 @@ function fmtRate(v) {
   if (v < 1000) return Math.round(v) + '';
   if (v < 1e6) return trimNum(v / 1e3) + 'k';
   return trimNum(v / 1e6) + 'M';
+}
+
+// Compact count for axes, at most one decimal: 7, 250, 2.7K, 3.4M.
+function fmtCountAxis(v) {
+  const units = [[1e9, 'G'], [1e6, 'M'], [1e3, 'K']];
+  for (const [scale, unit] of units) {
+    if (v >= scale) return +(v / scale).toFixed(1) + unit;
+  }
+  return String(Math.round(v));
 }
 
 function fmtCount(v) {
@@ -206,6 +220,56 @@ function rateLines(id) {
   const s = findSeries(id);
   if (!s) return [];
   return [{key: 'iops', label: 'IOPS', color: opColor(s), values: s.iops, fill: true}];
+}
+
+function ctrlColor(ctrl) { return CTRL_COLORS[ctrl % CTRL_COLORS.length]; }
+function ctrlSeries(ctrl) { return allSeries().filter((s) => s.ctrl_id === ctrl); }
+function ctrlIds() { return [...new Set(allSeries().map((s) => s.ctrl_id))]; }
+
+// Short name of a series within its controller, e.g. "Read" or "Read ≤ 16 KiB".
+function opLabel(s) {
+  return state.config.split_size && s.size_class_name !== 'all sizes' ?
+      `${s.opcode_name} ${s.size_class_name}` : s.opcode_name;
+}
+
+// Line style per size class, so that size classes of the same opcode (same
+// color) can be told apart.
+const SIZE_DASH = [[], [7, 3], [2, 3]];
+function opDash(s) {
+  return state.config.split_size ? SIZE_DASH[s.size_class] || [] : [];
+}
+
+function sumOrNaN(values) {
+  let sum = 0;
+  let any = false;
+  for (const v of values) if (isNum(v)) { sum += v; any = true; }
+  return any ? sum : NaN;
+}
+
+// Aggregates of all the series of one controller.
+function ctrlStats(ctrl) {
+  const series = ctrlSeries(ctrl);
+  const n = state.data ? state.data.t.length : 0;
+  const iops = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const v = sumOrNaN(series.map((s) => s.iops[i]));
+    iops[i] = isNum(v) ? v : null;
+  }
+  const byOp = new Map();
+  for (const s of series) {
+    const v = isNum(s.recent.iops) ? s.recent.iops : 0;
+    byOp.set(s.opcode_name, (byOp.get(s.opcode_name) || 0) + v);
+  }
+  let worst = null;
+  for (const s of series) {
+    if (isNum(s.recent.p99_us) && (!worst || s.recent.p99_us > worst.recent.p99_us)) worst = s;
+  }
+  return {
+    series, iops, byOp, worst,
+    total: sumOrNaN(series.map((s) => s.recent.iops)),
+    peakIops: peak(iops),
+    requests: series.reduce((acc, s) => acc + s.window.count, 0),
+  };
 }
 
 // Peak of the sum of the IOPS of `items` over the window.
@@ -620,7 +684,7 @@ function drawLedHistogram(c, spec) {
   const counts = spec.counts();
   const bounds = state.config ? state.config.buckets : null;
   if (!counts || !bounds) return;
-  const pad = {l: 10, r: 10, t: 28, b: 34};
+  const pad = {l: 50, r: 10, t: 28, b: 34};
   const pw = w - pad.l - pad.r;
   const ph = h - pad.t - pad.b;
   if (pw < 20 || ph < 20) return;
@@ -653,6 +717,35 @@ function drawLedHistogram(c, spec) {
   let total = 0;
   for (const v of counts) { max = Math.max(max, v); total += v; }
   const logMax = Math.log10(1 + max);
+
+  // Log scale y axis: the columns are log10(1 + count) high. Ticks at powers of
+  // ten and at the largest count.
+  const stackH = nSeg * (segH + gap) - gap;
+  const yOf = (v) => pad.t + ph - (Math.log10(1 + v) / logMax) * stackH;
+  const ticks = [];
+  for (let v = 1; v < max; v *= 10) ticks.push(v);
+  while (ticks.length && yOf(ticks[ticks.length - 1]) - yOf(max) < 14) ticks.pop();
+  ticks.push(max);
+  ctx.font = '10px ' + MONO;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  for (const v of ticks) {
+    const y = Math.round(yOf(v)) + 0.5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+    ctx.beginPath();
+    ctx.moveTo(pad.l, y);
+    ctx.lineTo(pad.l + pw, y);
+    ctx.stroke();
+    ctx.fillStyle = v === max ? '#c9ccd2' : '#8b9099';
+    ctx.fillText(fmtCountAxis(v), pad.l - 8, y);
+  }
+  ctx.save();
+  ctx.translate(11, pad.t + ph / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#6d717a';
+  ctx.fillText('requests (log)', 0, 0);
+  ctx.restore();
 
   for (let b = first; b <= last; b++) {
     const v = counts[b];
@@ -850,36 +943,63 @@ function stat(label, valueFn) {
 function buildSidebar() {
   const list = $('#device-list');
   list.textContent = '';
-  $('#nav-summary').classList.toggle('active', state.route.view === 'summary');
-  for (const [ctrl, items] of groupBy(allSeries(), (s) => s.ctrl_id)) {
-    list.append(el('div', 'dev-group', `nvme${ctrl}`));
-    for (const s of items) {
-      const color = opColor(s);
-      const a = el('a', 'dev');
+  const route = state.route;
+  $('#nav-summary').classList.toggle('active', route.view === 'summary');
+  for (const ctrl of ctrlIds()) {
+    // The device: links to its summary.
+    const color = ctrlColor(ctrl);
+    const dev = el('a', 'dev ctrl');
+    dev.href = '#/c/' + ctrl;
+    dev.title = `Summary of nvme${ctrl}`;
+    dev.style.setProperty('--accent', color);
+    if (route.view === 'ctrl' && route.ctrl === ctrl) dev.classList.add('active');
+    const text = el('div', 'dev-text');
+    const iops = el('div', 'dev-sub');
+    const worst = el('div', 'dev-sub');
+    text.append(el('div', 'dev-title', `nvme${ctrl}`), iops, worst);
+    const thumb = makeChartWrap('thumb');
+    registerChart(thumb, (c) => drawTimeChart(c, {
+      lines: () => [{key: 'iops', label: 'IOPS', color, values: ctrlStats(ctrl).iops, fill: true}],
+      log: false, compact: true, accent: color, markerKey: 'iops', fmt: fmtRate,
+    }));
+    dev.append(icon('dev-icon'), text, thumb);
+    list.append(dev);
+    state.updaters.push(() => {
+      const st = ctrlStats(ctrl);
+      iops.textContent = fmtRate(st.total) + ' IOPS';
+      worst.textContent = st.worst ?
+          `P99 ${fmtUs(st.worst.recent.p99_us)} ${st.worst.opcode_name}` : 'idle';
+      worst.title = 'Worst P99 latency of the last few seconds';
+    });
+
+    // Its request types: link to their details.
+    for (const s of ctrlSeries(ctrl)) {
+      const opColorValue = opColor(s);
+      const a = el('a', 'dev op');
       a.href = '#/s/' + s.id;
       a.title = seriesTitle(s);
-      a.style.setProperty('--accent', color);
-      if (state.route.view === 'series' && state.route.id === s.id) a.classList.add('active');
-      const text = el('div', 'dev-text');
-      text.append(el('div', 'dev-title', s.opcode_name));
-      if (state.config.split_size) text.append(el('div', 'dev-size', s.size_class_name));
+      a.style.setProperty('--accent', opColorValue);
+      if (route.view === 'series' && route.id === s.id) a.classList.add('active');
+      const opText = el('div', 'dev-text');
+      opText.append(el('div', 'dev-title', s.opcode_name));
+      if (state.config.split_size) opText.append(el('div', 'dev-size', s.size_class_name));
       const p99 = el('div', 'dev-sub');
-      const iops = el('div', 'dev-sub');
-      text.append(p99, iops);
-      const thumb = makeChartWrap('thumb');
-      registerChart(thumb, (c) => drawTimeChart(c, {
+      const opIops = el('div', 'dev-sub');
+      opText.append(p99, opIops);
+      const opThumb = makeChartWrap('thumb');
+      registerChart(opThumb, (c) => drawTimeChart(c, {
         lines: () => {
           const x = findSeries(s.id);
-          return x ? [{key: 'p99', label: 'P99', color, values: x.p99}] : [];
+          return x ? [{key: 'p99', label: 'P99', color: opColorValue, values: x.p99}] : [];
         },
-        log: true, compact: true, accent: color, markerKey: 'p99', fmt: fmtUs,
+        log: true, compact: true, accent: opColorValue, markerKey: 'p99', fmt: fmtUs,
       }));
-      a.append(icon('dev-icon'), text, thumb);
+      a.append(el('span', 'op-tree'), opText, opThumb);
       list.append(a);
       state.updaters.push(() => {
         const x = findSeries(s.id);
         p99.textContent = 'P99 ' + fmtUs(x && x.recent.p99_us);
-        iops.textContent = fmtRate(x && x.recent.iops) + ' IOPS';
+        opIops.textContent = fmtRate(x && x.recent.iops) + ' IOPS';
       });
     }
   }
@@ -914,50 +1034,36 @@ function buildEmpty(content) {
   content.append(box);
 }
 
+// A clickable tile with the totals of one controller.
+function buildCtrlTile(ctrl) {
+  const color = ctrlColor(ctrl);
+  const tile = el('a', 'tile');
+  tile.href = '#/c/' + ctrl;
+  tile.title = `Open the summary of nvme${ctrl}`;
+  tile.style.setProperty('--accent', color);
+  const head = el('div', 'tile-head');
+  const value = el('span', 'tile-value');
+  head.append(icon('tile-icon'), el('span', 'tile-title', `nvme${ctrl}`), value);
+  const sub = el('div', 'tile-sub');
+  const meter = makeChartWrap('meter');
+  tile.append(head, sub, meter);
+  let st = null;
+  state.updaters.push(() => {
+    st = ctrlStats(ctrl);
+    value.textContent = fmtRate(st.total) + ' IOPS';
+    const mix = [...st.byOp].map(([op, v]) => `${op} ${fmtRate(v)}`).join(' · ');
+    sub.textContent = mix + (st.worst ?
+        `  ·  worst P99 ${fmtUs(st.worst.recent.p99_us)} (${st.worst.opcode_name})` : '');
+  });
+  registerChart(meter, (c) => drawLedMeter(
+      c, st && st.peakIops > 0 ? st.total / st.peakIops : 0, color, false));
+  return tile;
+}
+
 function buildSummary(content) {
   const root = el('div', 'summary');
   const tiles = el('div', 'tiles');
-  let ctrlIndex = 0;
-  for (const [ctrl, items] of groupBy(allSeries(), (s) => s.ctrl_id)) {
-    const color = CTRL_COLORS[ctrlIndex++ % CTRL_COLORS.length];
-    const ids = items.map((s) => s.id);
-    const tile = el('div', 'tile');
-    tile.style.setProperty('--accent', color);
-    const head = el('div', 'tile-head');
-    const value = el('span', 'tile-value');
-    head.append(icon('tile-icon'), el('span', 'tile-title', `nvme${ctrl}`), value);
-    const sub = el('div', 'tile-sub');
-    const meter = makeChartWrap('meter');
-    tile.append(head, sub, meter);
-    tiles.append(tile);
-
-    const current = () => ids.map(findSeries).filter(Boolean);
-    let total = NaN;
-    let peakIops = NaN;
-    state.updaters.push(() => {
-      const ss = current();
-      total = ss.some((s) => isNum(s.recent.iops)) ?
-          ss.reduce((acc, s) => acc + (isNum(s.recent.iops) ? s.recent.iops : 0), 0) : NaN;
-      peakIops = peakTotalIops(ss);
-      value.textContent = fmtRate(total) + ' IOPS';
-      const byOp = new Map();
-      for (const s of ss) {
-        byOp.set(s.opcode_name, (byOp.get(s.opcode_name) || 0) +
-            (isNum(s.recent.iops) ? s.recent.iops : 0));
-      }
-      const mix = [...byOp].map(([op, v]) => `${op} ${fmtRate(v)}`).join(' · ');
-      let worst = null;
-      for (const s of ss) {
-        if (isNum(s.recent.p99_us) && (!worst || s.recent.p99_us > worst.recent.p99_us)) worst = s;
-      }
-      sub.textContent = mix + (worst ?
-          `  ·  worst P99 ${fmtUs(worst.recent.p99_us)} (${worst.opcode_name})` : '');
-      sub.title = 'Recent IOPS by opcode. The meter shows the current IOPS ' +
-          'relative to the peak in the time window.';
-    });
-    registerChart(meter, (c) => drawLedMeter(c, peakIops > 0 ? total / peakIops : 0, color, false));
-  }
-
+  for (const ctrl of ctrlIds()) tiles.append(buildCtrlTile(ctrl));
   const cards = el('div', 'cards');
   for (const s of allSeries()) cards.append(buildCard(s));
   root.append(tiles, cards);
@@ -999,6 +1105,161 @@ function buildCard(s) {
     rateValue.textContent = fmtRate(x && x.recent.iops) + ' IOPS';
   });
   return card;
+}
+
+// Chips linking to the request types of a controller.
+function opLegend(ctrl) {
+  const legend = el('div', 'legend');
+  for (const s of ctrlSeries(ctrl)) {
+    const chip = el('a', 'chip');
+    chip.href = '#/s/' + s.id;
+    chip.title = `Open ${seriesTitle(s)}`;
+    chip.style.setProperty('--c', opColor(s));
+    chip.append(el('span', 'chip-dot'), document.createTextNode(opLabel(s)));
+    legend.append(chip);
+  }
+  return legend;
+}
+
+// The summary of one controller: totals, its request types compared on shared
+// graphs, a table and their cards.
+function buildController(content, ctrl) {
+  if (!ctrlSeries(ctrl).length) {
+    const box = el('div', 'empty');
+    box.append(el('h2', null, 'Unknown device'));
+    const back = el('a', null, '← Back to the summary');
+    back.href = '#/';
+    box.append(el('p', null, `No data for nvme${ctrl}.`), back);
+    content.append(box);
+    return;
+  }
+  const color = ctrlColor(ctrl);
+  const root = el('div', 'detail');
+  root.style.setProperty('--accent', color);
+  let st = ctrlStats(ctrl);
+  state.updaters.push(() => { st = ctrlStats(ctrl); });
+
+  // Header with the total request rate.
+  const head = el('div', 'detail-head');
+  const sub = el('div', 'detail-sub');
+  const big = el('div', 'detail-big');
+  const bigValue = el('span', 'big-value');
+  big.append(el('span', 'big-label', 'IOPS · LAST FEW SECONDS'), bigValue);
+  const meter = makeChartWrap('meter big');
+  const meterBox = el('div', 'detail-meter');
+  meterBox.title = 'Current request rate relative to the peak in the time window';
+  meterBox.append(meter);
+  head.append(el('div', 'detail-title', `nvme${ctrl}`), sub, big, meterBox);
+  registerChart(meter, (c) => drawLedMeter(c, st.peakIops > 0 ? st.total / st.peakIops : 0, color, true));
+
+  // Latency of the request types, one percentile at a time.
+  const latLabel = el('div', 'section-label');
+  const latTitle = el('span');
+  const pctSeg = el('div', 'seg small');
+  pctSeg.style.marginLeft = '12px';
+  for (const p of PERCENTILES) {
+    const b = el('button', state.ctrlPct === p.key ? 'active' : '', p.label);
+    b.title = `Compare the ${p.label} latency of the request types`;
+    b.addEventListener('click', () => {
+      state.ctrlPct = p.key;
+      store.set('ctrlPct', p.key);
+      for (const x of pctSeg.children) x.classList.toggle('active', x === b);
+      update();
+    });
+    pctSeg.append(b);
+  }
+  latLabel.append(latTitle, opLegend(ctrl), pctSeg);
+  const lat = makeChartWrap('lat big');
+  const lc = registerChart(lat, (c) => drawTimeChart(c, {
+    lines: () => ctrlSeries(ctrl).map((s) => ({
+      key: s.id, label: opLabel(s), color: opColor(s), dash: opDash(s),
+      values: s[state.ctrlPct],
+    })),
+    log: true, fmt: fmtUs, axisFmt: fmtUsAxis, accent: color,
+  }), drawTimeOverlay);
+  attachTimeHover(lc);
+
+  // Request rates, stacked up to the total.
+  const rateLabel = el('div', 'section-label');
+  const rateValue = el('span', 'section-value');
+  rateLabel.append(el('span', null, 'Request rate by request type'), rateValue);
+  const rate = makeChartWrap('rate big');
+  const rc = registerChart(rate, (c) => drawTimeChart(c, {
+    lines: () => {
+      const ss = ctrlSeries(ctrl);
+      const lines = ss.map((s) => ({
+        key: s.id, label: opLabel(s), color: opColor(s), dash: opDash(s),
+        values: s.iops, fill: ss.length === 1,
+      }));
+      if (ss.length > 1) {
+        lines.unshift({key: 'total', label: 'Total', color: '#e8eaee', dash: [4, 4],
+          width: 1.2, glow: false, values: st.iops});
+      }
+      return lines;
+    },
+    log: false, fmt: (v) => fmtRate(v) + ' IOPS', axisFmt: fmtRate, accent: color,
+    markerKey: 'total',
+  }), drawTimeOverlay);
+  attachTimeHover(rc);
+
+  // Table of the request types.
+  const tablePanel = el('div', 'panel');
+  const tableLabel = el('div', 'section-label');
+  tableLabel.append(el('span', null, 'Request types · last few seconds'));
+  const table = el('table', 'op-table');
+  const headRow = el('tr');
+  for (const h of ['Request type', 'IOPS', 'P50', 'P90', 'P99', 'P99.9', 'Average',
+    'Requests in window']) {
+    headRow.append(el('th', null, h));
+  }
+  table.append(el('thead'));
+  table.firstChild.append(headRow);
+  const tbody = el('tbody');
+  for (const s of ctrlSeries(ctrl)) {
+    const row = el('tr');
+    const nameCell = el('td');
+    const link = el('a', 'op-link');
+    link.href = '#/s/' + s.id;
+    link.style.setProperty('--c', opColor(s));
+    link.append(el('span', 'chip-dot'), document.createTextNode(opLabel(s)));
+    nameCell.append(link);
+    row.append(nameCell);
+    const cells = [];
+    for (let i = 0; i < 7; i++) {
+      const td = el('td', 'num', '—');
+      cells.push(td);
+      row.append(td);
+    }
+    tbody.append(row);
+    state.updaters.push(() => {
+      const x = findSeries(s.id);
+      if (!x) return;
+      const r = x.recent;
+      const values = [fmtRate(r.iops), fmtUs(r.p50_us), fmtUs(r.p90_us), fmtUs(r.p99_us),
+        fmtUs(r.p999_us), fmtUs(r.avg_us), fmtCount(x.window.count)];
+      values.forEach((v, i) => { cells[i].textContent = v; });
+    });
+  }
+  table.append(tbody);
+  tablePanel.append(tableLabel, table);
+
+  const cardsLabel = el('div', 'section-label');
+  cardsLabel.append(el('span', null, 'Request type details'));
+  const cards = el('div', 'cards');
+  for (const s of ctrlSeries(ctrl)) cards.append(buildCard(s));
+
+  root.append(head, latLabel, lat, rateLabel, rate, tablePanel, cardsLabel, cards);
+  content.append(root);
+
+  state.updaters.push(() => {
+    const ops = [...st.byOp.keys()].join(', ');
+    sub.textContent = `Controller ${ctrl} · ${ops} · ` +
+        `${fmtCount(st.requests)} requests in the last ${fmtDuration(state.data.window_ms / 1000)}`;
+    bigValue.textContent = fmtRate(st.total);
+    const p = PERCENTILES.find((x) => x.key === state.ctrlPct);
+    latTitle.textContent = `${p.label} latency by request type (log scale)`;
+    rateValue.textContent = `${fmtRate(st.total)} IOPS now · peak ${fmtRate(st.peakIops)}`;
+  });
 }
 
 function buildDetail(content, id) {
@@ -1133,7 +1394,22 @@ function buildDetail(content, id) {
 function structureKey() {
   const ids = allSeries().map((s) => s.id).join(',');
   const empty = !state.data ? 'none' : ids ? '' : state.data.status.healthy ? 'idle' : 'down';
-  return `${state.route.view}|${state.route.id || ''}|${ids}|${empty}`;
+  const r = state.route;
+  return `${r.view}|${r.id || ''}|${r.ctrl ?? ''}|${ids}|${empty}`;
+}
+
+// Sets the breadcrumbs of the top bar, e.g. Summary › nvme1 › Read.
+function setTitle(parts) {
+  const title = $('#page-title');
+  title.textContent = '';
+  parts.forEach((part, i) => {
+    if (i) title.append(el('span', 'crumb-sep', '›'));
+    const e = el(part.href ? 'a' : 'span', part.href ? 'crumb' : 'crumb current', part.label);
+    if (part.href) e.href = part.href;
+    title.append(e);
+  });
+  document.title = [...parts].reverse().map((p) => p.label).join(' · ') + ' · NVMe Latency' +
+      (state.config ? ' · ' + state.config.hostname : '');
 }
 
 function rebuild() {
@@ -1144,21 +1420,22 @@ function rebuild() {
   content.textContent = '';
   buildSidebar();
   const route = state.route;
-  const title = $('#page-title');
+  const home = {label: 'Summary', href: '#/'};
   if (!state.data || !allSeries().length) {
-    title.textContent = 'Summary';
+    setTitle([{label: 'Summary'}]);
     buildEmpty(content);
   } else if (route.view === 'series') {
     const s = findSeries(route.id);
-    title.textContent = 'Devices';
-    document.title = `${s ? seriesTitle(s) : 'Series'} · NVMe Latency`;
+    setTitle(s ? [home, {label: `nvme${s.ctrl_id}`, href: `#/c/${s.ctrl_id}`},
+      {label: opLabel(s)}] : [home, {label: 'Unknown'}]);
     buildDetail(content, route.id);
+  } else if (route.view === 'ctrl') {
+    setTitle([home, {label: `nvme${route.ctrl}`}]);
+    buildController(content, route.ctrl);
   } else {
-    title.textContent = 'Summary';
+    setTitle([{label: 'Summary'}]);
     buildSummary(content);
   }
-  if (route.view !== 'series' || !state.data) document.title = `${title.textContent} · NVMe Latency`;
-  if (state.config) document.title += ' · ' + state.config.hostname;
 }
 
 function update() {
