@@ -56,12 +56,12 @@ bazel build -c opt //nvme_latency && \
 sudo $(pwd)/bazel-bin/nvme_latency/nvme_latency
 
 # Example usage:
-bazel build //nvme_latency && \
+bazel build -c opt //nvme_latency && \
 sudo $(pwd)/bazel-bin/nvme_latency/nvme_latency --ctrl_id=0 --split_size \
   --lat_min_us=65
 
 # Home nvme3
-bazel build //nvme_latency && \
+bazel build -c opt //nvme_latency && \
 sudo $(pwd)/bazel-bin/nvme_latency/nvme_latency --ctrl_id=3 --split_size \
   --lat_min_us=65
 
@@ -71,13 +71,13 @@ fio --name=read_lat_1 --thread=1   --ioengine=libaio --size=1200000K \
   --filename=/dev/nvme3n1   --rw=randread --iodepth=1 --bs=4K
 
 # Start with BPF tracing
-bazel build //nvme_latency && \
+bazel build -c opt //nvme_latency && \
 sudo $(pwd)/bazel-bin/nvme_latency/nvme_latency --bpf_trace
 cat /sys/kernel/tracing/trace_pipe
 
 # With the web dashboard (the dashboard runs as a regular user):
 sudo $(pwd)/bazel-bin/nvme_latency/nvme_latency --print=summary &
-$(pwd)/bazel-bin/nvme_latency/nvme_latency_web
+bazel run nvme_latency:nvme_latency_web -- --port=8080
 
 Improvement opportunities:
 * Cleanup old entries in the in-flight command map.
